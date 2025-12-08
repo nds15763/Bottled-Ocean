@@ -82,6 +82,7 @@ const App: React.FC = () => {
   const [caughtFish, setCaughtFish] = useState<Fish | null>(null);
   const [lore, setLore] = useState<string>("");
   const [loadingLore, setLoadingLore] = useState(false);
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
   
   // Collection
   const [collection, setCollection] = useState<string[]>([]);
@@ -197,9 +198,14 @@ const App: React.FC = () => {
   const handleFail = () => {
     if (mode === AppMode.FOCUSING) {
         if (navigator.vibrate) navigator.vibrate(200);
-        alert("The line snapped! You touched the phone!");
-        setMode(AppMode.MENU);
-        if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+        const confirmed = window.confirm("Are you sure you want to exit? You will lose your focus progress!");
+        if (confirmed) {
+            setShowExitConfirm(false);
+            setMode(AppMode.MENU);
+            if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+        } else {
+            setShowExitConfirm(false);
+        }
     }
   };
 

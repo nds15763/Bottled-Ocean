@@ -108,21 +108,31 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const maxPixelsPerFrame = width / 300; // 5 seconds * 60fps = 300 frames
       
       // Expanded dead zone - ship barely moves at small tilts
-      const deadZone = 0.15; // ~8.6 degrees
+      const deadZone = 0.45; // ~25.8 degrees - much larger to handle gyroscope noise
       let effectiveTilt = Math.abs(tilt) < deadZone ? 0 : tilt;
       
-      // Non-linear response curve - cubic function for gradual acceleration
-      const tiltSign = Math.sign(effectiveTilt);
-      const tiltMagnitude = Math.abs(effectiveTilt);
-      const normalizedTilt = Math.min(tiltMagnitude / (Math.PI / 4), 1); // Normalize to 0-1 (0 to 45°)
-      const responseCurve = Math.pow(normalizedTilt, 3); // Cubic response - slow at small angles
+      // If within dead zone, apply very strong friction to stop quickly
+      if (effectiveTilt === 0) {
+        ship.velocityX *= 0.75; // Very strong friction when no tilt (was 0.80)
+        // Stop completely if velocity is very small
+        if (Math.abs(ship.velocityX) < 0.5) {
+          ship.velocityX = 0;
+        }
+      } else {
+        // Non-linear response curve - cubic function for gradual acceleration
+        const tiltSign = Math.sign(effectiveTilt);
+        const tiltMagnitude = Math.abs(effectiveTilt);
+        const normalizedTilt = Math.min(tiltMagnitude / (Math.PI / 4), 1); // Normalize to 0-1 (0 to 45°)
+        const responseCurve = Math.pow(normalizedTilt, 3); // Cubic response - slow at small angles
+        
+        // Calculate target velocity based on response curve
+        const targetVelX = tiltSign * responseCurve * maxPixelsPerFrame;
+        
+        // Smoother acceleration and stronger damping
+        ship.velocityX += (targetVelX - ship.velocityX) * 0.05; // Reduced from 0.08 for smoother acceleration
+        ship.velocityX *= 0.90; // Stronger damping (was 0.92) for better friction
+      }
       
-      // Calculate target velocity based on response curve
-      const targetVelX = tiltSign * responseCurve * maxPixelsPerFrame;
-      
-      // Smoother acceleration and stronger damping
-      ship.velocityX += (targetVelX - ship.velocityX) * 0.05; // Reduced from 0.08 for smoother acceleration
-      ship.velocityX *= 0.92; // Increased damping from 0.95 for better friction
       ship.x += ship.velocityX;
       
       const padding = 80;
