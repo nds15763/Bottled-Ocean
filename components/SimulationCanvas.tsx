@@ -23,7 +23,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     x: 0, 
     y: 0, 
     angle: 0, 
-    targetAngle: 0,
+    targetAngle: 0, 
     velocityX: 0, 
     velocityY: 0 
   });
@@ -122,20 +122,28 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       // --- Drawing ---
       ctx.clearRect(0, 0, width, height);
 
-      // 1. SKY
+      // 1. SKY (Dynamic 4-Stage Gradient)
+      const hour = atmosphere.localHour;
       let skyColor1, skyColor2;
-      
-      // Determine time of day / sky gradient
-      const hour = new Date().getHours(); 
-      // Simplified mapping based on isDay flag for now, or just use the passed colors
-      if (atmosphere.type === WeatherType.NIGHT) {
-          skyColor1 = '#1a252f'; skyColor2 = '#000000';
-      } else if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
-          skyColor1 = '#7f8c8d'; skyColor2 = '#2c3e50';
+
+      // Storm Override
+      if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
+           skyColor1 = '#7f8c8d'; skyColor2 = '#2c3e50';
       } else {
-          // Dawn/Dusk handled by WeatherService via 'type', but let's stick to standard Blue for Sunny
-          // We can improve this if we pass 'localHour'
-           skyColor1 = '#5B9BD5'; skyColor2 = '#82B4E3'; 
+           // Clear sky interpolation
+           if (hour < 5 || hour >= 20) {
+               // Night
+               skyColor1 = '#1a252f'; skyColor2 = '#000000';
+           } else if (hour >= 5 && hour < 7) {
+               // Dawn (Purple to Orange)
+               skyColor1 = '#8E44AD'; skyColor2 = '#E67E22';
+           } else if (hour >= 7 && hour < 17) {
+               // Day (Blue to Light Blue)
+               skyColor1 = '#5B9BD5'; skyColor2 = '#82B4E3';
+           } else {
+               // Dusk (Orange to Purple/Dark Blue)
+               skyColor1 = '#D35400'; skyColor2 = '#2C3E50';
+           }
       }
       
       // Flash effect
@@ -149,10 +157,10 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       ctx.fillStyle = grad;
       ctx.fillRect(0,0,width,height);
 
-      // 2. CELESTIAL BODY / RAINBOW
+      // 2. CELESTIAL BODIES (Orbit Logic)
       ctx.save();
       
-      // Rainbow (Behind Sun/Moon)
+      // Rainbow
       if (atmosphere.hasRainbow) {
           ctx.globalCompositeOperation = 'screen';
           ctx.globalAlpha = 0.6;
@@ -172,37 +180,85 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.globalCompositeOperation = 'source-over';
       }
 
-      // Moon / Sun
-      // Simplistic position for now, or we can use the 'localHour' if available in future
-      if (atmosphere.type === WeatherType.NIGHT) {
-          ctx.translate(width * 0.8, height * 0.2);
-          ctx.fillStyle = '#F1C40F';
-          ctx.beginPath();
-          ctx.arc(0, 0, 40, 0, Math.PI*2);
-          ctx.fill();
-          if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
-      } else if (atmosphere.type === WeatherType.SUNNY) {
-          ctx.translate(width * 0.8, height * 0.2);
-          
-          ctx.strokeStyle = '#E74C3C';
-          ctx.lineWidth = 4;
-          ctx.setLineDash([10, 10]);
-          ctx.beginPath();
-          for(let i=0; i<8; i++) {
-              const ang = (i/8)*Math.PI*2 + t * 0.1;
-              ctx.moveTo(Math.cos(ang)*50, Math.sin(ang)*50);
-              ctx.lineTo(Math.cos(ang)*70, Math.sin(ang)*70);
-          }
-          ctx.stroke();
-          ctx.setLineDash([]);
-          
-          ctx.fillStyle = '#E74C3C';
-          ctx.beginPath();
-          const r = 45 + Math.sin(t*2)*2;
-          ctx.arc(0, 0, r, 0, Math.PI*2);
-          ctx.fill();
-          if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
+      // Celestial Orbit Calculation
+      // 06:00 -> Rise (Left), 12:00 -> Peak (Top), 18:00 -> Set (Right)
+      // Sun active 05:00 to 19:00
+      // Moon active 17:00 to 07:00
+      
+      const drawCelestial = (type: 'SUN' | 'MOON') => {
+           let progress = 0; // 0 to 1
+           let isVisible = false;
+
+           if (type === 'SUN') {
+               // 6 to 18
+               if (hour >= 5 && hour <= 19) {
+                   progress = (hour - 5) / 14; 
+                   isVisible = true;
+               }
+           } else {
+               // 17 to 24, or 0 to 7
+               if (hour >= 17) {
+                   progress = (hour - 17) / 14;
+                   isVisible = true;
+               } else if (hour <= 7) {
+                   progress = (hour + 7) / 14; 
+                   isVisible = true;
+               }
+           }
+
+           if (isVisible) {
+               const cx = width * progress;
+               // Parabola: y = 4 * h * x * (1-x) 
+               // Invert for canvas Y (0 is top)
+               const orbitHeight = height * 0.7; // How high it goes
+               const topMargin = height * 0.1;
+               const cy = height - (Math.sin(progress * Math.PI) * orbitHeight) - topMargin;
+               
+               ctx.translate(cx, cy);
+
+               if (type === 'SUN') {
+                   // Draw Sun
+                   ctx.strokeStyle = '#E74C3C';
+                   ctx.lineWidth = 4;
+                   ctx.setLineDash([10, 10]);
+                   ctx.beginPath();
+                   for(let i=0; i<8; i++) {
+                       const ang = (i/8)*Math.PI*2 + t * 0.1;
+                       ctx.moveTo(Math.cos(ang)*50, Math.sin(ang)*50);
+                       ctx.lineTo(Math.cos(ang)*70, Math.sin(ang)*70);
+                   }
+                   ctx.stroke();
+                   ctx.setLineDash([]);
+                   
+                   ctx.fillStyle = '#E74C3C';
+                   ctx.beginPath();
+                   const r = 45 + Math.sin(t*2)*2;
+                   ctx.arc(0, 0, r, 0, Math.PI*2);
+                   ctx.fill();
+               } else {
+                   // Draw Moon
+                   ctx.rotate(-0.5); // Tilt
+                   ctx.fillStyle = '#F1C40F';
+                   ctx.beginPath();
+                   ctx.arc(0, 0, 40, 0, Math.PI*2);
+                   ctx.fill();
+                   // Crater texture
+                   if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
+               }
+               // Reset
+               ctx.translate(-cx, -cy);
+           }
+      };
+
+      if (atmosphere.type === WeatherType.SUNNY || atmosphere.type === WeatherType.RAINY) {
+          // Even in rain, sun might be vaguely there, but definitely needed for 'Sunny'
+          drawCelestial('SUN');
+      } 
+      // Always try to draw moon if it's night time logic, unless forced storm
+      if (atmosphere.type === WeatherType.NIGHT || (!atmosphere.isDay && atmosphere.type !== WeatherType.STORM)) {
+          drawCelestial('MOON');
       }
+
       ctx.restore();
 
       // 3. CLOUDS
@@ -252,7 +308,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           { color: '#2980B9', yOff: 45, amp: atmosphere.waveAmp, speed: atmosphere.waveSpeed * 1.2 },  
       ];
 
-      if (atmosphere.type === WeatherType.NIGHT) {
+      // Dusk/Night overrides for water color
+      if (hour >= 18 || hour < 6 || atmosphere.type === WeatherType.NIGHT) {
           layers[0].color = '#2471A3';
           layers[1].color = '#1A5276';
           layers[2].color = '#154360';
@@ -260,6 +317,11 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           layers[0].color = '#546E7A';
           layers[1].color = '#455A64';
           layers[2].color = '#37474F';
+      } else if (hour >= 17 && hour < 18) {
+          // Sunset reflection
+          layers[0].color = '#EB984E';
+          layers[1].color = '#D35400';
+          layers[2].color = '#A04000';
       }
 
       layers.forEach((layer, i) => {

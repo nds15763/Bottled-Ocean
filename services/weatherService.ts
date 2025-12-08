@@ -12,6 +12,10 @@ const getWeatherType = (code: number): WeatherType => {
 };
 
 export const fetchLocalWeather = async (lat: number, lon: number): Promise<AtmosphereState> => {
+  // Capture local time for rendering sun/moon positions
+  const now = new Date();
+  const localHour = now.getHours() + (now.getMinutes() / 60);
+
   try {
     // Open-Meteo Free API - Added temperature_2m
     const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=weather_code,is_day,wind_speed_10m,precipitation,temperature_2m`;
@@ -69,6 +73,7 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
 
     return {
       type: finalType,
+      localHour,
       waveAmp,
       waveSpeed,
       windSpeed: windKmh,
@@ -83,6 +88,7 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
     // Default Fallback
     return {
       type: WeatherType.SUNNY,
+      localHour,
       waveAmp: 20,
       waveSpeed: 1.0,
       windSpeed: 10,

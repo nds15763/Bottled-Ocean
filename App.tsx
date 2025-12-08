@@ -6,7 +6,7 @@ import { generateFishLore } from './services/geminiService';
 import { fetchLocalWeather } from './services/weatherService';
 import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
-import { Compass, BookOpen, Clock, RotateCcw, X, MapPin, CloudRain, Wind, Thermometer, Anchor } from 'lucide-react';
+import { Compass, BookOpen, Clock, RotateCcw, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudLightning, CloudDrizzle, Settings, ChevronDown, LogOut } from 'lucide-react';
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
@@ -17,6 +17,7 @@ const App: React.FC = () => {
   // Weather / Atmosphere State
   const [atmosphere, setAtmosphere] = useState<AtmosphereState>({
       type: WeatherType.SUNNY,
+      localHour: 12,
       waveAmp: 15,
       waveSpeed: 0.8,
       windSpeed: 5,
@@ -25,11 +26,17 @@ const App: React.FC = () => {
       isDay: true,
       lightning: false
   });
-  const [zenNightMode, setZenNightMode] = useState(false);
+  
   const [locationName, setLocationName] = useState<string>("Unknown Waters");
   const [weatherEnabled, setWeatherEnabled] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>("");
   
+  // Debug / Zen State
+  const [debugHour, setDebugHour] = useState(12);
+  const [debugWind, setDebugWind] = useState(10);
+  const [debugWeather, setDebugWeather] = useState<WeatherType>(WeatherType.SUNNY);
+  const [zenPanelOpen, setZenPanelOpen] = useState(false);
+
   // Game State
   const [focusDuration, setFocusDuration] = useState<number>(25);
   const [timeLeft, setTimeLeft] = useState<number>(0);
@@ -74,16 +81,41 @@ const App: React.FC = () => {
       }
   };
 
+  // Debug / Zen Mode Effect
   useEffect(() => {
     if (mode === AppMode.ZEN) {
-        setAtmosphere(prev => ({
-            ...prev,
-            type: zenNightMode ? WeatherType.NIGHT : WeatherType.SUNNY,
-            isDay: !zenNightMode,
-            hasRainbow: !zenNightMode && Math.random() < 0.2 // Small chance in Zen
-        }));
+        // Calculate physics based on debug sliders
+        let waveAmp = 10 + (debugWind * 0.8);
+        if (waveAmp > 60) waveAmp = 60; // Cap
+        let waveSpeed = 0.5 + (debugWind * 0.025);
+        if (waveSpeed > 3.0) waveSpeed = 3.0;
+
+        // Storm overrides
+        let isStorm = debugWeather === WeatherType.STORM;
+        if (isStorm) {
+            waveAmp = Math.max(waveAmp, 45);
+            waveSpeed = Math.max(waveSpeed, 1.8);
+        }
+
+        // Day/Night logic based on slider
+        const isDay = debugHour >= 6 && debugHour <= 18;
+        
+        // Rainbow logic (Only day, sunny or rainy)
+        const hasRainbow = isDay && debugWeather === WeatherType.SUNNY && Math.random() < 0.2;
+
+        setAtmosphere({
+            type: debugWeather,
+            localHour: debugHour,
+            waveAmp,
+            waveSpeed,
+            windSpeed: debugWind,
+            temperature: 20, // Static for debug
+            hasRainbow,
+            isDay,
+            lightning: isStorm
+        });
     }
-  }, [mode, zenNightMode]);
+  }, [mode, debugHour, debugWind, debugWeather]);
 
   // Timer Logic
   useEffect(() => {
@@ -193,7 +225,7 @@ const App: React.FC = () => {
                     </button>
                     <button onClick={() => setMode(AppMode.ZEN)} 
                         className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
-                        <Compass className="text-green-500" size={32} />
+                        <Settings className="text-green-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
                     </button>
                 </div>
@@ -361,21 +393,112 @@ const App: React.FC = () => {
   );
 
   const renderZen = () => (
-      <div className="absolute inset-0 pointer-events-none z-40 flex flex-col justify-end p-8 landscape:p-4">
-          <div className="bg-white/80 backdrop-blur p-4 landscape:p-2 rounded-2xl shadow-lg border border-white/50 pointer-events-auto flex justify-between items-center gap-4 max-w-sm mx-auto w-full mb-8 landscape:mb-2">
-              <div className="text-sm font-hand text-slate-600 pl-2">
-                  <p className="font-bold text-lg landscape:text-base">Zen Mode</p>
-                  <p className="landscape:hidden">Chill & Watch.</p>
+      <div className="absolute inset-0 pointer-events-none z-40 flex flex-col justify-end items-center pb-8 transition-all">
+          {zenPanelOpen ? (
+            <div className="bg-white/95 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-slate-200 pointer-events-auto w-full max-w-lg mx-4 crayon-box animate-bounce-in">
+                  <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
+                      <h3 className="font-hand font-bold text-2xl text-slate-700 flex items-center gap-2">
+                          <Settings className="text-slate-400" size={24}/>
+                          Environment Control
+                      </h3>
+                      <button onClick={() => setZenPanelOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-500 transition">
+                         <ChevronDown size={24} />
+                     </button>
+                  </div>
+
+                  {/* Controls Grid */}
+                  <div className="space-y-6">
+                      
+                      {/* Time Slider */}
+                      <div className="space-y-2">
+                          <div className="flex justify-between font-hand font-bold text-slate-600">
+                              <span>Time of Day</span>
+                              <span>{debugHour.toFixed(1)} h</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" max="24" step="0.1" 
+                            value={debugHour}
+                            onChange={(e) => setDebugHour(parseFloat(e.target.value))}
+                            className="w-full h-3 bg-gradient-to-r from-slate-900 via-sky-400 to-slate-900 rounded-lg appearance-none cursor-pointer"
+                          />
+                      </div>
+
+                       {/* Wind Slider */}
+                       <div className="space-y-2">
+                          <div className="flex justify-between font-hand font-bold text-slate-600">
+                              <span>Wind Speed</span>
+                              <span>{debugWind} km/h</span>
+                          </div>
+                          <input 
+                            type="range" 
+                            min="0" max="100" step="1" 
+                            value={debugWind}
+                            onChange={(e) => setDebugWind(parseInt(e.target.value))}
+                            className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
+                          />
+                      </div>
+
+                      {/* Weather Type */}
+                      <div className="grid grid-cols-4 gap-2">
+                          <button 
+                            onClick={() => setDebugWeather(WeatherType.SUNNY)}
+                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <Sun size={20}/> Sunny
+                          </button>
+                          <button 
+                            onClick={() => setDebugWeather(WeatherType.RAINY)}
+                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <CloudDrizzle size={20}/> Rainy
+                          </button>
+                          <button 
+                            onClick={() => setDebugWeather(WeatherType.STORM)}
+                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <CloudLightning size={20}/> Storm
+                          </button>
+                          <button 
+                            onClick={() => setDebugWeather(WeatherType.NIGHT)}
+                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <Moon size={20}/> Night
+                          </button>
+                      </div>
+
+                  </div>
               </div>
-              <div className="flex gap-2">
-                 <button onClick={() => setZenNightMode(!zenNightMode)} className="p-3 landscape:p-2 bg-slate-200 rounded-full hover:bg-slate-300 transition">
-                     {zenNightMode ? '☀️' : '🌙'}
-                 </button>
-                 <button onClick={() => setMode(AppMode.MENU)} className="p-3 landscape:p-2 bg-red-100 text-red-500 rounded-full hover:bg-red-200 transition">
-                     <RotateCcw size={20} />
-                 </button>
+          ) : (
+              <div 
+                  className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full shadow-xl border-2 border-slate-200 pointer-events-auto flex items-center gap-6 cursor-pointer hover:scale-105 transition-all animate-bounce-in"
+                  onClick={() => setZenPanelOpen(true)}
+              >
+                  <div className="flex items-center gap-3">
+                     <span className="font-hand font-bold text-slate-700 text-xl">Zen Mode</span>
+                  </div>
+                  
+                  {/* Status Indicators */}
+                  <div className="flex items-center gap-3 text-slate-500 text-sm border-l-2 border-slate-200 pl-6">
+                        <div className="flex items-center gap-1">
+                            {atmosphere.isDay ? <Sun size={16} className="text-orange-400"/> : <Moon size={16} className="text-indigo-400"/>}
+                            <span className="font-bold font-hand">{debugHour.toFixed(1)}h</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                             <Wind size={16} className="text-teal-500"/>
+                             <span className="font-bold font-hand">{debugWind}</span>
+                        </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 ml-4 border-l-2 border-slate-200 pl-6">
+                      <div className="p-2 bg-sky-100 text-sky-600 rounded-full hover:bg-sky-200 transition">
+                          <Settings size={20} />
+                      </div>
+                      <button 
+                          onClick={(e) => { e.stopPropagation(); setMode(AppMode.MENU); }} 
+                          className="p-2 bg-red-100 text-red-500 rounded-full hover:bg-red-200 transition"
+                      >
+                          <LogOut size={20} />
+                      </button>
+                  </div>
               </div>
-          </div>
+          )}
       </div>
   );
 

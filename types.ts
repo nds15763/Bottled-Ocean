@@ -39,6 +39,7 @@ export enum WeatherType {
 
 export interface AtmosphereState {
   type: WeatherType;
+  localHour: number;    // 0 - 24, for celestial position and sky gradient
   waveAmp: number;      // 10 - 60
   waveSpeed: number;    // 0.5 - 2.5
   windSpeed: number;    // Display purpose
