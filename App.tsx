@@ -226,7 +226,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Main Controls Center */}
-      <div className="flex flex-col gap-6 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
+      <div className="flex flex-col gap-4 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
         
         {(!permissionGranted && !isDesktop) ? (
             <button onClick={requestPermission} className="bg-orange-400 text-white font-bold py-3 px-8 rounded-full shadow-lg transform active:scale-95 transition crayon-box font-hand text-xl w-full">
@@ -234,14 +234,14 @@ const App: React.FC = () => {
             </button>
         ) : (
             <>
-                <div className="bg-white p-6 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
-                    <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-4 landscape:mb-2 font-hand flex items-center gap-2">
+                <div className="bg-white p-5 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
+                    <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-3 landscape:mb-2 font-hand flex items-center gap-2">
                         <Clock size={20} /> Select Focus Time
                     </h3>
                     <div className="flex justify-between gap-2">
                         {[25, 30, 45].map(m => (
                             <button key={m} onClick={() => startFocus(m)} 
-                                className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-4 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-2xl landscape:text-xl">
+                                className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-3 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-xl landscape:text-xl">
                                 {m}m
                             </button>
                         ))}
@@ -250,12 +250,12 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                     <button onClick={() => setMode(AppMode.COLLECTION)} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
+                        className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
                         <BookOpen className="text-orange-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
                     </button>
                     <button onClick={() => setMode(AppMode.ZEN)} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
+                        className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
                         <Settings className="text-green-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
                     </button>
@@ -266,7 +266,7 @@ const App: React.FC = () => {
                     {!weatherEnabled ? (
                         <button 
                             onClick={handleEnableWeather}
-                            className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-4 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
+                            className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-3 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
                         >
                             <div className="flex flex-col text-left">
                                 <span className="font-bold font-hand text-lg landscape:text-base">Sync Weather</span>
@@ -277,7 +277,7 @@ const App: React.FC = () => {
                             </div>
                         </button>
                     ) : (
-                        <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-4 landscape:p-3 rounded-2xl flex items-center gap-3">
+                        <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-3 landscape:p-3 rounded-2xl flex items-center gap-3">
                             <div className="bg-emerald-200 p-2 rounded-full">
                                 <MapPin size={18} />
                             </div>
@@ -300,74 +300,26 @@ const App: React.FC = () => {
   const renderFocusing = () => (
     <div className="absolute inset-0 z-50 pointer-events-none p-4 w-full h-full"> 
        
-       {/* 
-          Flexible Layout Container:
-          Portrait: Flex Column aligned right (Sidebar style)
-          Landscape: Distributed elements (Corners)
-       */}
-       <div className="w-full h-full flex flex-col landscape:block items-end justify-center pointer-events-none relative">
+       <div className="w-full h-full relative">
 
-           {/* Timer Card - Portrait: Stacked Right / Landscape: Top-Left */}
-           <div className="w-[200px] landscape:w-auto landscape:absolute landscape:top-6 landscape:left-12 
-                           bg-white/95 backdrop-blur-md py-3 landscape:py-2 landscape:px-6 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box 
-                           flex justify-center items-center mb-4 landscape:mb-0">
-               <span className="text-slate-700 font-hand text-5xl landscape:text-6xl font-bold tracking-widest">
-                 {formatTime(timeLeft)}
-               </span>
-           </div>
-
-           {/* Ship's Log Card - Portrait: Stacked Right / Landscape: Top-Right */}
-           <div className="w-[200px] landscape:absolute landscape:top-6 landscape:right-12 
-                           bg-white/90 backdrop-blur-sm border-2 border-white/50 rounded-2xl shadow-sm crayon-box flex flex-col">
+           {/* Timer Group - Top-Center (Portrait) / Top-Left (Landscape) */}
+           <div className="absolute top-12 left-1/2 -translate-x-1/2 landscape:top-6 landscape:left-12 landscape:translate-x-0 flex flex-col items-center transition-all duration-500">
                
-               {/* Top Half: Current Time */}
-               <div className="p-4 landscape:p-2 border-b-2 border-slate-100/80 flex flex-col items-center justify-center bg-white/40 rounded-t-2xl">
-                    <div className="flex items-center gap-1 text-slate-400 mb-1">
-                        <Clock size={12} />
-                        <span className="text-[10px] uppercase tracking-widest font-bold">Local Time</span>
-                    </div>
-                    <span className="font-hand text-4xl landscape:text-3xl font-bold text-slate-700">{currentTime}</span>
+               {/* Timer Card */}
+               <div className="z-20 bg-white/95 backdrop-blur-md py-4 px-10 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box flex justify-center items-center">
+                   <span className="text-slate-700 font-hand text-6xl font-black tracking-widest">
+                     {formatTime(timeLeft)}
+                   </span>
                </div>
-               
-               {/* Bottom Half: 3-Column Grid */}
-               <div className="grid grid-cols-3 divide-x divide-slate-100/60 p-2">
-                    {/* Weather */}
-                    <div className="flex flex-col items-center justify-center gap-1 py-1">
-                        {atmosphere.type === WeatherType.SUNNY && <Sun size={18} className="text-yellow-500"/>}
-                        {atmosphere.type === WeatherType.RAINY && <CloudRain size={18} className="text-blue-500"/>}
-                        {atmosphere.type === WeatherType.STORM && <CloudLightning size={18} className="text-slate-600"/>}
-                        {atmosphere.type === WeatherType.NIGHT && <Moon size={18} className="text-indigo-500"/>}
-                        <span className="text-[9px] uppercase font-bold text-slate-500 font-hand tracking-tight">
-                             {atmosphere.type === WeatherType.SUNNY && "Sun"}
-                             {atmosphere.type === WeatherType.RAINY && "Rain"}
-                             {atmosphere.type === WeatherType.STORM && "Storm"}
-                             {atmosphere.type === WeatherType.NIGHT && "Clear"}
-                        </span>
-                    </div>
-                    {/* Temp */}
-                    <div className="flex flex-col items-center justify-center gap-1 py-1">
-                        <Thermometer size={18} className="text-orange-500"/>
-                        <span className="text-xs font-bold text-slate-600 font-hand">{atmosphere.temperature.toFixed(0)}°</span>
-                    </div>
-                    {/* Wind */}
-                    <div className="flex flex-col items-center justify-center gap-1 py-1">
-                        <Wind size={18} className="text-teal-500"/>
-                        <span className="text-xs font-bold text-slate-600 font-hand">{atmosphere.windSpeed}</span>
-                    </div>
+
+               {/* Warning Tag - Spliced Below */}
+               <div className="-mt-4 pt-6 pb-2 px-8 bg-yellow-100/95 text-yellow-700 rounded-b-xl shadow-lg border-x-2 border-b-2 border-yellow-200 w-[90%] z-10 flex justify-center items-center">
+                    <span className="font-bold text-sm font-hand flex items-center gap-2 uppercase tracking-wide">
+                        ⚠️ Don't Touch!
+                    </span>
                </div>
            </div>
 
-           {/* Portrait Spacer */}
-           <div className="flex-1 landscape:hidden"></div>
-           
-           {/* Warning Note - Portrait: Stacked Right / Landscape: Bottom-Center */}
-           <div className="w-[200px] landscape:w-auto landscape:absolute landscape:bottom-6 landscape:left-1/2 landscape:-translate-x-1/2
-                           bg-orange-50/90 text-orange-800 p-3 landscape:px-6 rounded-2xl shadow-lg border-2 border-orange-200 text-center crayon-box">
-                <p className="font-bold text-base font-hand mb-1 flex items-center justify-center gap-2">
-                    ⚠️ Don't Touch!
-                </p>
-                <p className="text-[10px] landscape:text-xs font-hand opacity-80 leading-tight">Focus on your task. Touching screen breaks the line.</p>
-           </div>
        </div>
 
        {/* Trap layer for interaction penalty */}
