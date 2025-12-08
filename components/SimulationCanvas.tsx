@@ -1,102 +1,61 @@
 import React, { useRef, useEffect } from 'react';
-import { WaveSpring, ShipState, Bubble } from '../types';
+import { ShipState, WeatherType } from '../types';
 
 interface SimulationCanvasProps {
-  tilt: number; // Fluid surface angle in radians (0 is flat)
-  onTurbulenceChange: (turbulence: number) => void;
+  tilt: number;
+  weather: WeatherType;
+  isFishing: boolean;
+  caughtFishColor?: string | null;
+  mode: string;
 }
 
-const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ tilt, onTurbulenceChange }) => {
+const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ 
+  tilt, 
+  weather, 
+  isFishing,
+  caughtFishColor,
+  mode
+}) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
-  // Physics constants
-  const SPRING_COUNT = 150;
-  const SPREAD = 0.2; 
-  const TENSION = 0.02; 
-  const DAMPING = 0.05;
-  const FLUID_INERTIA = 0.96;
-  const FLUID_STIFFNESS = 0.05;
-  
-  // Mutable State
-  const springsRef = useRef<WaveSpring[]>([]);
+  // Physics State
   const shipRef = useRef<ShipState>({ x: 0, y: 0, angle: 0, velocityX: 0, velocityY: 0 });
-  const bubblesRef = useRef<Bubble[]>([]);
-  const fluidPhysicsRef = useRef({
-    angle: 0,        
-    velocity: 0,     
-    level: 0         
-  });
-  const turbulenceRef = useRef<number>(0);
-
-  // Initialize function to reset/resize simulation
-  const initSimulation = () => {
-    if (!containerRef.current || !canvasRef.current) return;
-    
-    const width = containerRef.current.clientWidth;
-    const height = containerRef.current.clientHeight;
-    
-    // Update canvas size
-    canvasRef.current.width = width;
-    canvasRef.current.height = height;
-    
-    const spacing = width / (SPRING_COUNT - 1);
-    const initialSprings: WaveSpring[] = [];
-    for (let i = 0; i < SPRING_COUNT; i++) {
-      initialSprings.push({
-        x: i * spacing,
-        height: height * 0.5,
-        targetHeight: height * 0.5,
-        velocity: 0,
-      });
-    }
-    springsRef.current = initialSprings;
-    
-    // Only reset ship if it's off screen or first run
-    if (shipRef.current.x === 0 || shipRef.current.x > width) {
-        shipRef.current = {
-            x: width / 2,
-            y: height * 0.5,
-            angle: 0,
-            velocityX: 0,
-            velocityY: 0
-        };
-    }
-    
-    // Re-seed bubbles if needed or just keep them
-    if (bubblesRef.current.length === 0) {
-        const bubbles: Bubble[] = [];
-        for(let i=0; i<30; i++) {
-            bubbles.push({
-                x: Math.random() * width,
-                y: height - Math.random() * (height * 0.4),
-                size: Math.random() * 8 + 2,
-                speed: Math.random() * 1 + 0.5,
-                alpha: Math.random() * 0.4 + 0.1
-            });
-        }
-        bubblesRef.current = bubbles;
-    }
-  };
+  const timeRef = useRef(0);
+  const cloudsRef = useRef<{x: number, y: number, scale: number, type: number}[]>([]);
   
-  // Handle Resize / Init
+  // Generate clouds once
   useEffect(() => {
-    initSimulation();
-    
-    const handleResize = () => {
-        initSimulation();
-    };
-    
-    window.addEventListener('resize', handleResize);
-    window.addEventListener('orientationchange', handleResize);
-    
-    return () => {
-        window.removeEventListener('resize', handleResize);
-        window.removeEventListener('orientationchange', handleResize);
-    };
+    cloudsRef.current = Array.from({ length: 6 }).map(() => ({
+      x: Math.random() * 2000, 
+      y: Math.random() * 200 + 50, 
+      scale: 0.8 + Math.random() * 0.5,
+      type: Math.floor(Math.random() * 3)
+    }));
   }, []);
 
-  // Animation Loop
+  // Utility to create noise pattern for texture
+  const createNoisePattern = (ctx: CanvasRenderingContext2D) => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 100;
+    canvas.height = 100;
+    const c = canvas.getContext('2d');
+    if (!c) return null;
+    
+    // Fill white
+    c.fillStyle = '#ffffff';
+    c.fillRect(0,0,100,100);
+    
+    // Add noise
+    for(let i=0; i<500; i++) {
+        c.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`;
+        c.beginPath();
+        c.arc(Math.random()*100, Math.random()*100, Math.random()*2, 0, Math.PI*2);
+        c.fill();
+    }
+    return ctx.createPattern(canvas, 'repeat');
+  };
+
   useEffect(() => {
     let animationFrameId: number;
     const canvas = canvasRef.current;
@@ -104,258 +63,309 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ tilt, onTurbulenceC
 
     if (!canvas || !ctx) return;
 
+    // Initialize Texture Pattern
+    const noisePattern = createNoisePattern(ctx);
+
     const render = () => {
+      timeRef.current += 0.01;
       const width = canvas.width;
       const height = canvas.height;
-      const springs = springsRef.current;
+      const t = timeRef.current;
+
+      // --- Physics Update ---
       const ship = shipRef.current;
-      const fluid = fluidPhysicsRef.current;
       
-      if (springs.length === 0) return;
-
-      // --- 1. Fluid Dynamics ---
-      // 'tilt' passed in is the gravity angle. 
-      // If gravity pulls "Right", tilt is positive. Water should tilt "Left" (Negative angle) to stay level.
-      // We clamp it to prevent the water from flipping over completely in UI
-      const clampedTilt = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, tilt));
-      
-      // Target angle for the water surface is negative of the device tilt
-      const targetAngle = -clampedTilt;
-
-      const displacement = targetAngle - fluid.angle;
-      const acceleration = displacement * FLUID_STIFFNESS;
-      
-      fluid.velocity += acceleration;
-      fluid.velocity *= FLUID_INERTIA;
-      fluid.angle += fluid.velocity;
-
-      const currentTurbulence = Math.abs(fluid.velocity) * 100 + Math.abs(displacement) * 10;
-      turbulenceRef.current = currentTurbulence;
-      onTurbulenceChange(currentTurbulence);
-
-      // --- 2. Update Springs ---
-      const baseWaterLevel = height * 0.55; 
-      const centerX = width / 2;
-
-      for (let i = 0; i < SPRING_COUNT; i++) {
-        const spring = springs[i];
-        
-        // Calculate target height based on tilted plane equation
-        const distanceFromCenter = spring.x - centerX;
-        const tiltOffset = distanceFromCenter * Math.tan(fluid.angle);
-        
-        spring.targetHeight = baseWaterLevel + tiltOffset;
-
-        // Turbulence Choppiness
-        if (Math.abs(fluid.velocity) > 0.001) {
-            spring.velocity += (Math.random() - 0.5) * Math.abs(fluid.velocity) * 150;
-        }
-        
-        // Idle ambient wave
-        const time = Date.now() / 500;
-        const gentleWave = Math.sin(spring.x * 0.02 + time) * 2;
-        spring.targetHeight += gentleWave;
-
-        // Hooke's Law
-        const x = spring.targetHeight - spring.height;
-        const acc = TENSION * x - DAMPING * spring.velocity;
-        
-        spring.velocity += acc;
-        spring.height += spring.velocity;
-      }
-
-      // Spread
-      const lDeltas = new Array(SPRING_COUNT).fill(0);
-      const rDeltas = new Array(SPRING_COUNT).fill(0);
-
-      for (let j = 0; j < 4; j++) {
-        for (let i = 0; i < SPRING_COUNT; i++) {
-          if (i > 0) {
-            lDeltas[i] = SPREAD * (springs[i].height - springs[i - 1].height);
-            springs[i - 1].velocity += lDeltas[i];
-          }
-          if (i < SPRING_COUNT - 1) {
-            rDeltas[i] = SPREAD * (springs[i].height - springs[i + 1].height);
-            springs[i + 1].velocity += rDeltas[i];
-          }
-        }
-        for (let i = 0; i < SPRING_COUNT; i++) {
-          if (i > 0) springs[i - 1].height += lDeltas[i];
-          if (i < SPRING_COUNT - 1) springs[i + 1].height += rDeltas[i];
-        }
-      }
-
-      // --- 3. Ship Physics ---
-      const springIndex = Math.floor((ship.x / width) * (SPRING_COUNT - 1));
-      const safeIndex = Math.max(1, Math.min(SPRING_COUNT - 2, springIndex));
-      
-      const p0 = springs[safeIndex - 1];
-      const p1 = springs[safeIndex];
-      const p2 = springs[safeIndex + 1];
-      
-      // Interpolate water height
-      const t = (ship.x - p0.x) / (p2.x - p0.x);
-      // const waterHeightAtShip = p1.height; // Simple
-      const waterHeightAtShip = (1-t)*p0.height + t*p2.height; // Slightly better lerp? Close enough.
-
-      // Calculate slope
-      const dx = p2.x - p0.x;
-      const dy = p2.height - p0.height;
-      const waveSlope = Math.atan2(dy, dx);
-
-      // Slide Physics
-      const gravitySlide = Math.sin(waveSlope) * 0.8; 
-      ship.velocityX += gravitySlide;
-      ship.velocityX *= 0.95;
-
+      // Ship moves based on tilt (gravity)
+      const targetVelX = tilt * 15;
+      ship.velocityX += (targetVelX - ship.velocityX) * 0.05;
       ship.x += ship.velocityX;
 
-      // Walls
-      if (ship.x < 50) {
-          ship.x = 50;
-          ship.velocityX = Math.abs(ship.velocityX) * 0.5 + 2;
-      } else if (ship.x > width - 50) {
-          ship.x = width - 50;
-          ship.velocityX = -Math.abs(ship.velocityX) * 0.5 - 2;
-      }
+      // Boundary check
+      if (ship.x < 100) { ship.x = 100; ship.velocityX *= -0.5; }
+      if (ship.x > width - 100) { ship.x = width - 100; ship.velocityX *= -0.5; }
 
-      // Buoyancy
-      const targetY = waterHeightAtShip - 15;
-      ship.velocityY += (targetY - ship.y) * 0.1;
-      ship.velocityY *= 0.8;
-      ship.y += ship.velocityY;
+      // Wave calculation for ship height/angle
+      // We simulate the "Main" wave layer for ship physics
+      const waveFreq = 0.002;
+      const waveAmp = 20;
+      const waveY = Math.sin(ship.x * waveFreq + t * 2) * waveAmp + (Math.sin(ship.x * 0.01 + t) * 10);
+      
+      const targetY = height * 0.6 + waveY - 20;
+      ship.y += (targetY - ship.y) * 0.1;
 
-      // Rotation
-      const targetShipAngle = waveSlope + (ship.velocityX * 0.02);
-      ship.angle = ship.angle + (targetShipAngle - ship.angle) * 0.15;
+      // Calculate angle based on wave slope
+      const nextY = Math.sin((ship.x + 5) * waveFreq + t * 2) * waveAmp;
+      const slope = (nextY - waveY) / 5;
+      const targetAngle = Math.atan(slope) + (ship.velocityX * 0.002);
+      ship.angle += (targetAngle - ship.angle) * 0.1;
 
-      // --- 4. Draw ---
+      // --- Drawing ---
       ctx.clearRect(0, 0, width, height);
 
-      // Bubbles
-      ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
-      bubblesRef.current.forEach(b => {
-        b.y -= b.speed;
-        b.x += Math.sin(b.y * 0.02 + fluid.angle) * 2;
-        // Reset if OOB
-        const col = Math.floor(b.x / width * (SPRING_COUNT -1));
-        const safeCol = Math.max(0, Math.min(SPRING_COUNT-1, col));
-        
-        if (b.y < springs[safeCol].height || b.y < 0) {
-            b.y = height + 10;
-            b.x = Math.random() * width;
-        }
-        ctx.beginPath();
-        ctx.arc(b.x, b.y, b.size, 0, Math.PI * 2);
-        ctx.fill();
+      // 1. SKY
+      let skyColor1, skyColor2;
+      if (weather === WeatherType.NIGHT) {
+          skyColor1 = '#2c3e50'; skyColor2 = '#000000';
+      } else if (weather === WeatherType.RAINY) {
+          skyColor1 = '#bdc3c7'; skyColor2 = '#2c3e50';
+      } else {
+          skyColor1 = '#5B9BD5'; skyColor2 = '#82B4E3'; // Crayon Blue
+      }
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, skyColor1);
+      grad.addColorStop(1, skyColor2);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0,0,width,height);
+
+      // 2. CELESTIAL BODY
+      ctx.save();
+      if (weather === WeatherType.NIGHT) {
+          // Moon
+          ctx.translate(width * 0.8, height * 0.2);
+          ctx.fillStyle = '#F1C40F';
+          ctx.beginPath();
+          ctx.arc(0, 0, 40, 0, Math.PI*2);
+          ctx.fill();
+          // Texture overlay
+          if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
+      } else if (weather === WeatherType.SUNNY) {
+          // Red Sun (Paper Cutout Style)
+          ctx.translate(width * 0.8, height * 0.2);
+          // Rays
+          ctx.strokeStyle = '#E74C3C';
+          ctx.lineWidth = 4;
+          ctx.setLineDash([10, 10]);
+          ctx.beginPath();
+          for(let i=0; i<8; i++) {
+              const ang = (i/8)*Math.PI*2 + t * 0.1;
+              ctx.moveTo(Math.cos(ang)*50, Math.sin(ang)*50);
+              ctx.lineTo(Math.cos(ang)*70, Math.sin(ang)*70);
+          }
+          ctx.stroke();
+          ctx.setLineDash([]);
+          
+          // Sun Body
+          ctx.fillStyle = '#E74C3C';
+          ctx.beginPath();
+          const r = 45 + Math.sin(t*2)*2;
+          ctx.arc(0, 0, r, 0, Math.PI*2);
+          ctx.fill();
+          if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
+      }
+      ctx.restore();
+
+      // 3. CLOUDS (Blobs)
+      ctx.fillStyle = '#ECF0F1'; // Off white
+      cloudsRef.current.forEach((cloud, i) => {
+          let cx = (cloud.x + t * 10) % (width + 400) - 200;
+          let cy = cloud.y;
+          
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(cloud.scale, cloud.scale);
+          
+          // Draw Cloud Blob
+          ctx.beginPath();
+          ctx.arc(0, 0, 30, 0, Math.PI*2);
+          ctx.arc(25, -10, 35, 0, Math.PI*2);
+          ctx.arc(50, 0, 30, 0, Math.PI*2);
+          ctx.fill();
+          
+          // Add subtle shadow/texture
+          ctx.strokeStyle = '#BDC3C7';
+          ctx.lineWidth = 2;
+          ctx.stroke();
+          
+          ctx.restore();
       });
 
-      // Water Body
-      ctx.beginPath();
-      ctx.moveTo(0, height); 
-      ctx.lineTo(springs[0].x, springs[0].height);
-      for (let i = 0; i < SPRING_COUNT - 1; i++) {
-           const p0 = springs[i];
-           const p1 = springs[i + 1];
-           const midX = (p0.x + p1.x) / 2;
-           const midY = (p0.height + p1.height) / 2;
-           ctx.quadraticCurveTo(p0.x, p0.height, midX, midY);
+      // 4. WATER LAYERS (Paper Waves)
+      const layers = [
+          { color: '#2980B9', yOff: 40, amp: 25, speed: 1.0 }, // Back
+          { color: '#3498DB', yOff: 20, amp: 30, speed: 1.2 }, // Mid
+          { color: '#5DADE2', yOff: 0, amp: 20, speed: 0.8 },  // Front (Ship sits here)
+      ];
+
+      if (weather === WeatherType.NIGHT) {
+          layers[0].color = '#1A5276';
+          layers[1].color = '#2471A3';
+          layers[2].color = '#2980B9';
       }
-      ctx.lineTo(springs[SPRING_COUNT-1].x, springs[SPRING_COUNT-1].height);
-      ctx.lineTo(width, height);
-      ctx.closePath();
 
-      const gradient = ctx.createLinearGradient(0, height * 0.2, 0, height);
-      gradient.addColorStop(0, '#38bdf8'); 
-      gradient.addColorStop(0.5, '#0284c7'); 
-      gradient.addColorStop(1, '#0c4a6e'); 
-      ctx.fillStyle = gradient;
-      ctx.fill();
+      layers.forEach((layer, i) => {
+          ctx.fillStyle = layer.color;
+          ctx.beginPath();
+          const baseY = height * 0.6 + layer.yOff;
+          
+          ctx.moveTo(0, height);
+          ctx.lineTo(0, baseY);
+          
+          // Draw Sine Wave
+          for(let x=0; x<=width; x+=10) {
+              const y = baseY + Math.sin(x * 0.003 + t * layer.speed + i) * layer.amp;
+              ctx.lineTo(x, y);
+          }
+          
+          ctx.lineTo(width, height);
+          ctx.closePath();
+          ctx.fill();
 
-      // Foam
-      ctx.lineWidth = 6;
-      ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
-      ctx.lineCap = 'round';
-      ctx.stroke();
+          // Top edge highlight (Paper thickness)
+          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.lineWidth = 2;
+          ctx.stroke();
 
-      // Ship
-      ctx.save();
-      ctx.translate(ship.x, ship.y);
-      ctx.rotate(ship.angle);
-      const scale = 1.0; 
-      ctx.scale(scale, scale);
+          // Texture
+          if (noisePattern) {
+              ctx.fillStyle = noisePattern;
+              ctx.globalAlpha = 0.1;
+              ctx.fill();
+              ctx.globalAlpha = 1.0;
+          }
 
-      // Hull
-      ctx.beginPath();
-      ctx.moveTo(-40, -15);
-      ctx.quadraticCurveTo(-45, 20, 0, 25); 
-      ctx.quadraticCurveTo(45, 20, 40, -15); 
-      ctx.quadraticCurveTo(0, -10, -40, -15); 
-      ctx.fillStyle = '#f97316';
-      ctx.fill();
-      
-      // Shine
-      ctx.beginPath();
-      ctx.ellipse(-20, 5, 10, 5, -0.2, 0, Math.PI * 2);
-      ctx.fillStyle = 'rgba(255,255,255,0.3)';
-      ctx.fill();
+          // Draw Ship after the 2nd layer (so it sits inside/behind front wave)
+          if (i === 1) {
+              renderShip(ctx, ship, t, width, height, isFishing, caughtFishColor, noisePattern);
+          }
+      });
 
-      // Stripe
-      ctx.beginPath();
-      ctx.moveTo(-42, 5);
-      ctx.quadraticCurveTo(0, 10, 42, 5);
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = '#fff7ed';
-      ctx.stroke();
-
-      // Cabin
-      ctx.fillStyle = '#facc15'; 
-      ctx.beginPath();
-      ctx.roundRect(-25, -45, 50, 35, 8);
-      ctx.fill();
-      
-      // Roof
-      ctx.fillStyle = '#ef4444'; 
-      ctx.beginPath();
-      ctx.roundRect(-28, -50, 56, 8, 4);
-      ctx.fill();
-
-      // Windows
-      ctx.fillStyle = '#38bdf8'; 
-      ctx.beginPath();
-      ctx.arc(-12, -28, 6, 0, Math.PI * 2);
-      ctx.arc(12, -28, 6, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.strokeStyle = '#fff';
-      ctx.lineWidth = 2;
-      ctx.stroke();
-
-      // Smokestack
-      ctx.fillStyle = '#475569'; 
-      ctx.beginPath();
-      ctx.moveTo(-5, -50);
-      ctx.lineTo(-8, -75);
-      ctx.lineTo(8, -75);
-      ctx.lineTo(5, -50);
-      ctx.fill();
-
-      // Smoke
-      const smokeTime = Date.now() / 200;
-      const puffY = -85 - (smokeTime % 20);
-      const puffAlpha = 1 - ((smokeTime % 20) / 20);
-      ctx.fillStyle = `rgba(255, 255, 255, ${puffAlpha})`;
-      ctx.beginPath();
-      ctx.arc(0, puffY, 8 + (Math.sin(smokeTime) * 2), 0, Math.PI * 2);
-      ctx.fill();
-      
-      ctx.restore();
+      // 5. WEATHER OVERLAYS
+      if (weather === WeatherType.RAINY) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          for(let i=0; i<50; i++) {
+              const rx = (Math.random() * width * 1.5) - (t * 500 % width);
+              const ry = Math.random() * height;
+              // Rain slant
+              ctx.moveTo(rx, ry);
+              ctx.lineTo(rx - 10, ry + 20);
+          }
+          ctx.stroke();
+      }
 
       animationFrameId = requestAnimationFrame(render);
     };
 
-    animationFrameId = requestAnimationFrame(render);
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [tilt, onTurbulenceChange]);
+    // --- Helper: Render Ship ---
+    const renderShip = (
+        ctx: CanvasRenderingContext2D, 
+        ship: ShipState, 
+        t: number,
+        w: number, 
+        h: number,
+        fishing: boolean,
+        fishColor: string | null | undefined,
+        texture: CanvasPattern | null
+    ) => {
+        ctx.save();
+        ctx.translate(ship.x, ship.y);
+        ctx.rotate(ship.angle);
+
+        // -- The Boat --
+        // Hull
+        ctx.fillStyle = '#F4F6F7'; // White paper
+        ctx.beginPath();
+        ctx.moveTo(-50, -20);
+        ctx.bezierCurveTo(-40, 30, 40, 30, 50, -20); // U shape
+        ctx.closePath();
+        ctx.fill();
+        if (texture) { ctx.fillStyle = texture; ctx.globalAlpha = 0.1; ctx.fill(); ctx.globalAlpha = 1; }
+        
+        // Red Stripe
+        ctx.fillStyle = '#E74C3C';
+        ctx.beginPath();
+        ctx.rect(-45, -15, 90, 8);
+        ctx.fill();
+
+        // Cabin / Funnel
+        ctx.fillStyle = '#2C3E50'; // Black/Dark Blue
+        ctx.beginPath();
+        ctx.rect(-10, -45, 20, 25);
+        ctx.fill();
+
+        // Smoke
+        ctx.fillStyle = 'rgba(236, 240, 241, 0.8)';
+        const smokeY = -55 - Math.sin(t*5)*5;
+        ctx.beginPath();
+        ctx.arc(5 + Math.sin(t)*5, smokeY, 8 + Math.sin(t*3)*2, 0, Math.PI*2);
+        ctx.arc(15 + Math.sin(t+1)*5, smokeY-15, 12 + Math.sin(t*2)*3, 0, Math.PI*2);
+        ctx.fill();
+
+        // -- The Fisherman --
+        ctx.fillStyle = '#E67E22'; // Orange Shirt
+        ctx.beginPath();
+        ctx.arc(0, -25, 10, Math.PI, 0); // Torso
+        ctx.fill();
+        
+        ctx.fillStyle = '#F1C40F'; // Yellow Hat
+        ctx.beginPath();
+        ctx.moveTo(-10, -32);
+        ctx.lineTo(10, -32);
+        ctx.lineTo(0, -42);
+        ctx.fill();
+
+        // -- Fishing Rod --
+        if (fishing || fishColor) {
+            ctx.strokeStyle = '#7F8C8D';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(5, -30); // Hand pos
+            ctx.lineTo(35, -50); // Rod tip
+            ctx.stroke();
+
+            // Line
+            ctx.strokeStyle = 'white';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(35, -50);
+            
+            // Calculate bobber pos in local space (rough approx)
+            const lineSlack = fishColor ? 0 : Math.sin(t*3)*5 + 10;
+            const bobberX = 50; 
+            const bobberY = 10; // Water level relative to ship center roughly
+            
+            ctx.quadraticCurveTo(45, -20 + lineSlack, bobberX, bobberY);
+            ctx.stroke();
+
+            // Bobber or Fish
+            if (fishColor) {
+                // Draw Fish hanging
+                ctx.fillStyle = fishColor;
+                ctx.beginPath();
+                ctx.arc(bobberX, bobberY, 8, 0, Math.PI*2);
+                ctx.fill();
+            } else {
+                // Bobber
+                ctx.fillStyle = '#E74C3C';
+                ctx.beginPath();
+                ctx.arc(bobberX, bobberY, 3, 0, Math.PI*2);
+                ctx.fill();
+            }
+        } else if (mode === 'ZEN') {
+            // Wave hand interaction in Zen mode?
+            // Just static for now
+        }
+
+        ctx.restore();
+    };
+
+    const handleResize = () => {
+        if (containerRef.current && canvasRef.current) {
+            canvasRef.current.width = containerRef.current.clientWidth;
+            canvasRef.current.height = containerRef.current.clientHeight;
+        }
+    };
+    
+    window.addEventListener('resize', handleResize);
+    handleResize();
+
+    requestAnimationFrame(render);
+    return () => {
+        cancelAnimationFrame(animationFrameId);
+        window.removeEventListener('resize', handleResize);
+    };
+  }, [tilt, weather, isFishing, caughtFishColor, mode]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 w-full h-full pointer-events-none">
