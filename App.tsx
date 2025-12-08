@@ -27,8 +27,9 @@ const App: React.FC = () => {
           console.log('Locked to landscape orientation');
           
           // Hide status bar for immersive experience
+          await StatusBar.setOverlaysWebView({ overlay: true });
           await StatusBar.hide();
-          console.log('Status bar hidden');
+          console.log('Status bar hidden and overlay enabled');
         } catch (error) {
           console.error('Failed to configure system settings:', error);
         }
@@ -291,37 +292,44 @@ const App: React.FC = () => {
         )}
       </div>
       
-      {/* Spacer for portrait bottom area */}
+   {/* Spacer for portrait bottom area */}
       <div className="landscape:hidden h-8"></div>
     </div>
   );
 
   const renderFocusing = () => (
-    <div className="absolute inset-0 z-50 pointer-events-none p-4 flex flex-col items-end justify-center">
+    <div className="absolute inset-0 z-50 pointer-events-none p-4 w-full h-full"> 
        
-       {/* Right Sidebar Column - Fixed Width 200px */}
-       <div className="flex flex-col gap-4 w-[200px] animate-fade-in pointer-events-none h-full py-2 justify-center">
-           
-           {/* Timer Card - Compact */}
-           <div className="bg-white/95 backdrop-blur-md py-3 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box flex justify-center items-center w-full">
-               <span className="text-slate-700 font-hand text-5xl font-bold tracking-widest">
+       {/* 
+          Flexible Layout Container:
+          Portrait: Flex Column aligned right (Sidebar style)
+          Landscape: Distributed elements (Corners)
+       */}
+       <div className="w-full h-full flex flex-col landscape:block items-end justify-center pointer-events-none relative">
+
+           {/* Timer Card - Portrait: Stacked Right / Landscape: Top-Left */}
+           <div className="w-[200px] landscape:w-auto landscape:absolute landscape:top-6 landscape:left-12 
+                           bg-white/95 backdrop-blur-md py-3 landscape:py-2 landscape:px-6 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box 
+                           flex justify-center items-center mb-4 landscape:mb-0">
+               <span className="text-slate-700 font-hand text-5xl landscape:text-6xl font-bold tracking-widest">
                  {formatTime(timeLeft)}
                </span>
            </div>
 
-           {/* Ship's Log Card - Split Design */}
-           <div className="bg-white/90 backdrop-blur-sm border-2 border-white/50 rounded-2xl shadow-sm crayon-box w-full flex flex-col">
+           {/* Ship's Log Card - Portrait: Stacked Right / Landscape: Top-Right */}
+           <div className="w-[200px] landscape:absolute landscape:top-6 landscape:right-12 
+                           bg-white/90 backdrop-blur-sm border-2 border-white/50 rounded-2xl shadow-sm crayon-box flex flex-col">
                
-               {/* Top Half: Current Time (Prominent) */}
-               <div className="p-4 border-b-2 border-slate-100/80 flex flex-col items-center justify-center bg-white/40 rounded-t-2xl">
+               {/* Top Half: Current Time */}
+               <div className="p-4 landscape:p-2 border-b-2 border-slate-100/80 flex flex-col items-center justify-center bg-white/40 rounded-t-2xl">
                     <div className="flex items-center gap-1 text-slate-400 mb-1">
                         <Clock size={12} />
                         <span className="text-[10px] uppercase tracking-widest font-bold">Local Time</span>
                     </div>
-                    <span className="font-hand text-4xl font-bold text-slate-700">{currentTime}</span>
+                    <span className="font-hand text-4xl landscape:text-3xl font-bold text-slate-700">{currentTime}</span>
                </div>
                
-               {/* Bottom Half: 3-Column Grid for Stats */}
+               {/* Bottom Half: 3-Column Grid */}
                <div className="grid grid-cols-3 divide-x divide-slate-100/60 p-2">
                     {/* Weather */}
                     <div className="flex flex-col items-center justify-center gap-1 py-1">
@@ -336,13 +344,11 @@ const App: React.FC = () => {
                              {atmosphere.type === WeatherType.NIGHT && "Clear"}
                         </span>
                     </div>
-
                     {/* Temp */}
                     <div className="flex flex-col items-center justify-center gap-1 py-1">
                         <Thermometer size={18} className="text-orange-500"/>
                         <span className="text-xs font-bold text-slate-600 font-hand">{atmosphere.temperature.toFixed(0)}°</span>
                     </div>
-
                     {/* Wind */}
                     <div className="flex flex-col items-center justify-center gap-1 py-1">
                         <Wind size={18} className="text-teal-500"/>
@@ -351,15 +357,16 @@ const App: React.FC = () => {
                </div>
            </div>
 
-           {/* Spacer */}
-           <div className="flex-1"></div>
+           {/* Portrait Spacer */}
+           <div className="flex-1 landscape:hidden"></div>
            
-           {/* Bottom Warning Note - Same Width as Sidebar */}
-           <div className="bg-orange-50/90 text-orange-800 p-3 rounded-2xl shadow-lg border-2 border-orange-200 text-center crayon-box w-full">
+           {/* Warning Note - Portrait: Stacked Right / Landscape: Bottom-Center */}
+           <div className="w-[200px] landscape:w-auto landscape:absolute landscape:bottom-6 landscape:left-1/2 landscape:-translate-x-1/2
+                           bg-orange-50/90 text-orange-800 p-3 landscape:px-6 rounded-2xl shadow-lg border-2 border-orange-200 text-center crayon-box">
                 <p className="font-bold text-base font-hand mb-1 flex items-center justify-center gap-2">
                     ⚠️ Don't Touch!
                 </p>
-                <p className="text-[10px] font-hand opacity-80 leading-tight">Focus on your task. Touching screen breaks the line.</p>
+                <p className="text-[10px] landscape:text-xs font-hand opacity-80 leading-tight">Focus on your task. Touching screen breaks the line.</p>
            </div>
        </div>
 
