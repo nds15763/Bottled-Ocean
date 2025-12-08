@@ -17,7 +17,7 @@ const App: React.FC = () => {
   // App State
   const [mode, setMode] = useState<AppMode>(AppMode.MENU);
   
-  // System Initialization - Lock Landscape & Hide Status Bar
+  // System Initialization - Lock Landscape & Hide Status Bar & Keep Awake
   useEffect(() => {
     const initializeSystemSettings = async () => {
       if (Capacitor.isNativePlatform()) {
@@ -33,6 +33,20 @@ const App: React.FC = () => {
         } catch (error) {
           console.error('Failed to configure system settings:', error);
         }
+      }
+
+      // Web Wake Lock
+      if ('wakeLock' in navigator) {
+        try {
+            let wakeLock: any = null;
+            const requestLock = async () => {
+                try { wakeLock = await (navigator as any).wakeLock.request('screen'); } catch (e) { console.error(e); }
+            };
+            await requestLock();
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') requestLock();
+            });
+        } catch (err) { console.error(err); }
       }
     };
     
@@ -167,6 +181,11 @@ const App: React.FC = () => {
 
   // Actions
   const startFocus = (min: number) => {
+    // Implicitly request permission if needed
+    if (!permissionGranted && requestPermission) {
+        requestPermission();
+    }
+
     setFocusDuration(min);
     setTimeLeft(min * 60);
     setMode(AppMode.FOCUSING);
@@ -228,68 +247,60 @@ const App: React.FC = () => {
       {/* Main Controls Center */}
       <div className="flex flex-col gap-4 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
         
-        {(!permissionGranted && !isDesktop) ? (
-            <button onClick={requestPermission} className="bg-orange-400 text-white font-bold py-3 px-8 rounded-full shadow-lg transform active:scale-95 transition crayon-box font-hand text-xl w-full">
-            Start Adventure (Enable Sensors)
+        <div className="bg-white p-5 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
+            <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-3 landscape:mb-2 font-hand flex items-center gap-2">
+                <Clock size={20} /> Select Focus Time
+            </h3>
+            <div className="flex justify-between gap-2">
+                {[15, 30, 45].map(m => (
+                    <button key={m} onClick={() => startFocus(m)} 
+                        className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-3 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-xl landscape:text-xl">
+                        {m}m
+                    </button>
+                ))}
+            </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-4">
+            <button onClick={() => setMode(AppMode.COLLECTION)} 
+                className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
+                <BookOpen className="text-orange-500" size={32} />
+                <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
             </button>
-        ) : (
-            <>
-                <div className="bg-white p-5 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
-                    <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-3 landscape:mb-2 font-hand flex items-center gap-2">
-                        <Clock size={20} /> Select Focus Time
-                    </h3>
-                    <div className="flex justify-between gap-2">
-                        {[25, 30, 45].map(m => (
-                            <button key={m} onClick={() => startFocus(m)} 
-                                className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-3 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-xl landscape:text-xl">
-                                {m}m
-                            </button>
-                        ))}
+            <button onClick={() => setMode(AppMode.ZEN)} 
+                className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
+                <Settings className="text-green-500" size={32} />
+                <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
+            </button>
+        </div>
+        
+            {/* Weather Sync Button (Integrated into Right Column for Landscape) */}
+        <div className="w-full">
+            {!weatherEnabled ? (
+                <button 
+                    onClick={handleEnableWeather}
+                    className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-3 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
+                >
+                    <div className="flex flex-col text-left">
+                        <span className="font-bold font-hand text-lg landscape:text-base">Sync Weather</span>
+                        <span className="text-xs text-indigo-400 font-sans hidden sm:block">Real-time effects</span>
+                    </div>
+                    <div className="bg-indigo-200 p-2 rounded-full text-indigo-700 group-hover:scale-110 transition">
+                        <CloudRain size={20} />
+                    </div>
+                </button>
+            ) : (
+                <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-3 landscape:p-3 rounded-2xl flex items-center gap-3">
+                    <div className="bg-emerald-200 p-2 rounded-full">
+                        <MapPin size={18} />
+                    </div>
+                    <div className="flex flex-col text-left overflow-hidden">
+                        <span className="font-bold font-hand text-lg landscape:text-base whitespace-nowrap">Ocean Synced</span>
+                        <span className="text-xs text-emerald-500 font-sans truncate">{locationName}</span>
                     </div>
                 </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => setMode(AppMode.COLLECTION)} 
-                        className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
-                        <BookOpen className="text-orange-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
-                    </button>
-                    <button onClick={() => setMode(AppMode.ZEN)} 
-                        className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
-                        <Settings className="text-green-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
-                    </button>
-                </div>
-                
-                 {/* Weather Sync Button (Integrated into Right Column for Landscape) */}
-                <div className="w-full">
-                    {!weatherEnabled ? (
-                        <button 
-                            onClick={handleEnableWeather}
-                            className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-3 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
-                        >
-                            <div className="flex flex-col text-left">
-                                <span className="font-bold font-hand text-lg landscape:text-base">Sync Weather</span>
-                                <span className="text-xs text-indigo-400 font-sans hidden sm:block">Real-time effects</span>
-                            </div>
-                            <div className="bg-indigo-200 p-2 rounded-full text-indigo-700 group-hover:scale-110 transition">
-                                <CloudRain size={20} />
-                            </div>
-                        </button>
-                    ) : (
-                        <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-3 landscape:p-3 rounded-2xl flex items-center gap-3">
-                            <div className="bg-emerald-200 p-2 rounded-full">
-                                <MapPin size={18} />
-                            </div>
-                            <div className="flex flex-col text-left overflow-hidden">
-                                <span className="font-bold font-hand text-lg landscape:text-base whitespace-nowrap">Ocean Synced</span>
-                                <span className="text-xs text-emerald-500 font-sans truncate">{locationName}</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-            </>
-        )}
+            )}
+        </div>
       </div>
       
    {/* Spacer for portrait bottom area */}
@@ -306,8 +317,8 @@ const App: React.FC = () => {
            <div className="absolute top-12 left-1/2 -translate-x-1/2 landscape:top-6 landscape:left-12 landscape:translate-x-0 flex flex-col items-center transition-all duration-500">
                
                {/* Timer Card */}
-               <div className="z-20 bg-white/95 backdrop-blur-md py-4 px-10 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box flex justify-center items-center">
-                   <span className="text-slate-700 font-hand text-6xl font-black tracking-widest">
+               <div className="z-20 bg-white/95 backdrop-blur-md py-4 w-72 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box flex justify-center items-center">
+                   <span className="text-slate-700 font-hand text-6xl font-black tracking-widest tabular-nums">
                      {formatTime(timeLeft)}
                    </span>
                </div>

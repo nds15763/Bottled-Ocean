@@ -104,11 +104,25 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const ship = shipRef.current;
       
       // Horizontal Movement
-      let effectiveTilt = tilt;
-      if (Math.abs(effectiveTilt) < 0.05) effectiveTilt = 0;
-      const targetVelX = effectiveTilt * 8;
-      ship.velocityX += (targetVelX - ship.velocityX) * 0.08;
-      ship.velocityX *= 0.95; 
+      // Calculate max speed to ensure 5 seconds to traverse screen
+      const maxPixelsPerFrame = width / 300; // 5 seconds * 60fps = 300 frames
+      
+      // Expanded dead zone - ship barely moves at small tilts
+      const deadZone = 0.15; // ~8.6 degrees
+      let effectiveTilt = Math.abs(tilt) < deadZone ? 0 : tilt;
+      
+      // Non-linear response curve - cubic function for gradual acceleration
+      const tiltSign = Math.sign(effectiveTilt);
+      const tiltMagnitude = Math.abs(effectiveTilt);
+      const normalizedTilt = Math.min(tiltMagnitude / (Math.PI / 4), 1); // Normalize to 0-1 (0 to 45°)
+      const responseCurve = Math.pow(normalizedTilt, 3); // Cubic response - slow at small angles
+      
+      // Calculate target velocity based on response curve
+      const targetVelX = tiltSign * responseCurve * maxPixelsPerFrame;
+      
+      // Smoother acceleration and stronger damping
+      ship.velocityX += (targetVelX - ship.velocityX) * 0.05; // Reduced from 0.08 for smoother acceleration
+      ship.velocityX *= 0.92; // Increased damping from 0.95 for better friction
       ship.x += ship.velocityX;
       
       const padding = 80;
