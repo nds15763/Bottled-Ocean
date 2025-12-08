@@ -399,6 +399,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.stroke();
       }
 
+      // FIX: Capture the ID so it can be cancelled properly on re-render
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -514,7 +515,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     window.addEventListener('resize', handleResize);
     handleResize();
 
-    requestAnimationFrame(render);
+    // Fix: Capture the ID initially as well
+    animationFrameId = requestAnimationFrame(render);
+    
     return () => {
         cancelAnimationFrame(animationFrameId);
         window.removeEventListener('resize', handleResize);

@@ -6,7 +6,7 @@ import { generateFishLore } from './services/geminiService';
 import { fetchLocalWeather } from './services/weatherService';
 import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
-import { Compass, BookOpen, Clock, RotateCcw, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudLightning, CloudDrizzle, Settings, ChevronDown, LogOut } from 'lucide-react';
+import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning } from 'lucide-react';
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
@@ -273,93 +273,86 @@ const App: React.FC = () => {
   );
 
   const renderFocusing = () => (
-    <div className="absolute inset-0 z-50 flex flex-col items-center justify-between py-12 landscape:py-4 pointer-events-none">
+    <div className="absolute inset-0 z-50 pointer-events-none p-6 flex flex-col items-end justify-between">
        
-       {/* Marine Dashboard (Top Left) */}
-       <div className="absolute top-6 left-6 landscape:top-4 landscape:left-4 pointer-events-none animate-fade-in landscape:origin-top-left landscape:scale-90">
-           <div className="bg-white/90 backdrop-blur-sm border-2 border-slate-200 p-4 rounded-lg shadow-lg rotate-1 crayon-box max-w-[160px]">
-               <h4 className="font-bold text-slate-400 text-xs uppercase tracking-widest mb-2 border-b border-slate-200 pb-1">Ship's Log</h4>
+       {/* Top Right Group */}
+       <div className="flex flex-col items-end gap-4 animate-fade-in pointer-events-none">
+           
+           {/* Timer */}
+           <div className="bg-white/90 backdrop-blur-md px-8 py-3 rounded-3xl text-slate-700 font-hand text-5xl font-bold shadow-xl border-4 border-slate-100 transition-all crayon-box">
+               {formatTime(timeLeft)}
+           </div>
+
+           {/* Ship's Log */}
+           <div className="bg-white/90 backdrop-blur-md border-2 border-slate-200 p-4 rounded-3xl shadow-lg crayon-box w-40">
+               <h4 className="font-bold text-slate-400 text-xs uppercase tracking-widest mb-3 pb-1 border-b border-slate-100 text-right">Ship's Log</h4>
                
-               <div className="space-y-2 font-hand text-slate-700">
+               <div className="space-y-2 font-hand text-slate-700 text-sm flex flex-col items-end">
                    <div className="flex items-center gap-2">
+                       <span className="font-bold text-base">{currentTime}</span>
                        <Clock size={16} className="text-sky-500"/>
-                       <span className="font-bold text-lg">{currentTime}</span>
                    </div>
                    
                    <div className="flex items-center gap-2">
-                       <Thermometer size={16} className="text-orange-500"/>
                        <span>{atmosphere.temperature.toFixed(1)}°C</span>
+                       <Thermometer size={16} className="text-orange-500"/>
                    </div>
 
                    <div className="flex items-center gap-2">
-                       <Wind size={16} className="text-teal-500"/>
                        <span>{atmosphere.windSpeed} km/h</span>
+                       <Wind size={16} className="text-teal-500"/>
                    </div>
                    
-                   <div className="flex items-center gap-2 text-sm">
-                        {atmosphere.type === WeatherType.SUNNY && <div className="text-yellow-500 flex gap-1 items-center">☀️ Sunny</div>}
-                        {atmosphere.type === WeatherType.RAINY && <div className="text-blue-500 flex gap-1 items-center">🌧️ Rainy</div>}
-                        {atmosphere.type === WeatherType.STORM && <div className="text-slate-600 flex gap-1 items-center">⛈️ Storm</div>}
-                        {atmosphere.type === WeatherType.NIGHT && <div className="text-indigo-500 flex gap-1 items-center">🌙 Clear</div>}
+                   <div className="flex items-center gap-2">
+                        {atmosphere.type === WeatherType.SUNNY && <><span>Sunny</span><Sun size={16} className="text-yellow-500"/></>}
+                        {atmosphere.type === WeatherType.RAINY && <><span>Rainy</span><CloudRain size={16} className="text-blue-500"/></>}
+                        {atmosphere.type === WeatherType.STORM && <><span>Storm</span><CloudLightning size={16} className="text-slate-600"/></>}
+                        {atmosphere.type === WeatherType.NIGHT && <><span>Clear</span><Moon size={16} className="text-indigo-500"/></>}
                    </div>
                </div>
            </div>
        </div>
-
-       {/* Timer */}
-       <div className="bg-white/90 backdrop-blur px-8 py-4 rounded-full text-slate-700 font-hand text-6xl landscape:text-5xl font-bold shadow-lg border-4 border-slate-100 mt-20 landscape:mt-2 transition-all">
-          {formatTime(timeLeft)}
-       </div>
        
-       {/* Warning */}
-       <div className="bg-orange-100 text-orange-800 px-6 py-4 rounded-xl shadow-lg max-w-xs text-center border-2 border-orange-200 mb-12 landscape:mb-2 rotate-1 mx-4 transition-all">
-          <p className="font-bold text-2xl landscape:text-xl font-hand mb-1">Don't Touch!</p>
-          <p className="text-sm font-hand landscape:text-xs">Touching the screen will scare the fish and break the line.</p>
+       {/* Bottom Right: Warning */}
+       <div className="w-full max-w-xs pointer-events-none">
+            <div className="bg-orange-50/90 text-orange-800 px-6 py-4 rounded-3xl shadow-lg border-2 border-orange-200 text-center crayon-box">
+                <p className="font-bold text-xl font-hand mb-1 flex items-center justify-center gap-2">
+                    ⚠️ Don't Touch!
+                </p>
+                <p className="text-xs font-hand opacity-80">Line will break if you touch screen.</p>
+            </div>
        </div>
 
        {/* Trap layer for interaction penalty */}
-       <div className="absolute inset-0 pointer-events-auto" onClick={handleFail}></div>
+       <div className="absolute inset-0 pointer-events-auto z-40" onClick={handleFail}></div>
     </div>
   );
 
   const renderReward = () => (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white rounded-3xl p-8 landscape:p-6 max-w-sm landscape:max-w-2xl w-full shadow-2xl text-center relative crayon-box animate-bounce-in my-auto landscape:flex landscape:flex-row landscape:items-center landscape:gap-8 landscape:text-left">
+      <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 landscape:p-8 max-w-md w-full shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center">
         
-        {/* Left Side (Icon) in Landscape */}
-        <div className="relative flex-shrink-0 landscape:w-1/3 flex flex-col items-center">
-             <div className="text-8xl landscape:text-7xl filter drop-shadow-lg mb-6 landscape:mb-0 transform transition hover:scale-110">
-                {caughtFish?.icon}
-            </div>
-             <div className="landscape:hidden mt-4 space-y-2">
-                <h2 className="text-4xl font-black text-slate-800 font-hand">{caughtFish?.name}</h2>
-                <div className="inline-block px-3 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200">
-                    {caughtFish?.rarity}
-                </div>
-            </div>
+        <div className="text-8xl filter drop-shadow-xl mb-6 transform hover:scale-110 transition cursor-pointer">
+            {caughtFish?.icon}
         </div>
         
-        {/* Right Side (Details) in Landscape */}
-        <div className="flex-1">
-            <div className="hidden landscape:block mb-4 space-y-1">
-                <h2 className="text-4xl font-black text-slate-800 font-hand">{caughtFish?.name}</h2>
-                <div className="inline-block px-3 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200">
-                    {caughtFish?.rarity}
-                </div>
-            </div>
-
-            <div className="my-6 landscape:my-2 bg-slate-50 p-4 rounded-xl border-2 border-slate-100 text-left relative">
-                <div className="absolute -top-3 -left-2 bg-yellow-200 w-8 h-8 rounded-full opacity-50"></div>
-                <p className="font-hand text-lg text-slate-600 relative z-10 leading-relaxed">
-                    {loadingLore ? "The fisherman is writing in his journal..." : `"${lore}"`}
-                </p>
-            </div>
-
-            <button onClick={() => setMode(AppMode.MENU)} 
-                className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-4 landscape:py-3 rounded-xl font-hand text-2xl shadow-md transition transform active:scale-95 mt-4">
-                Awesome!
-            </button>
+        <h2 className="text-4xl font-black text-slate-800 font-hand mb-2">{caughtFish?.name}</h2>
+        <div className="inline-block px-4 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200 mb-6">
+            {caughtFish?.rarity}
         </div>
+
+        <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-100 text-left relative w-full">
+            <div className="absolute -top-3 -left-2 bg-yellow-200 w-8 h-8 rounded-full opacity-50"></div>
+            <p className="font-hand text-lg text-slate-600 relative z-10 leading-relaxed italic">
+                {loadingLore ? "The fisherman is writing in his journal..." : `"${lore}"`}
+            </p>
+        </div>
+
+        <button onClick={() => setMode(AppMode.MENU)} 
+            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-4 rounded-2xl font-hand text-xl shadow-lg border-b-4 border-sky-700 active:border-b-0 active:translate-y-1 transition-all mt-8">
+            Awesome!
+        </button>
+
       </div>
     </div>
   );
@@ -378,8 +371,8 @@ const App: React.FC = () => {
                 {FISH_DB.map(fish => {
                     const caught = collection.includes(fish.id);
                     return (
-                        <div key={fish.id} className={`aspect-square rounded-2xl flex flex-col items-center justify-center p-4 text-center border-2 transition-all relative overflow-hidden
-                            ${caught ? 'bg-white border-slate-200 shadow-sm' : 'bg-slate-100 border-dashed border-slate-300'}`}>
+                        <div key={fish.id} className={`aspect-square rounded-3xl flex flex-col items-center justify-center p-4 text-center border-2 transition-all relative overflow-hidden
+                            ${caught ? 'bg-white border-slate-200 shadow-sm crayon-box' : 'bg-slate-100 border-dashed border-slate-300'}`}>
                             
                             {caught ? (
                                 <>
@@ -401,8 +394,8 @@ const App: React.FC = () => {
   const renderZen = () => (
       <div className="absolute inset-0 pointer-events-none z-40 flex flex-col justify-end items-center pb-8 transition-all">
           {zenPanelOpen ? (
-            <div className="bg-white/95 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-slate-200 pointer-events-auto w-full max-w-lg mx-4 crayon-box animate-bounce-in">
-                  <div className="flex justify-between items-center mb-4 border-b border-slate-200 pb-2">
+            <div className="bg-white/95 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-slate-200 pointer-events-auto w-full max-w-lg mx-4 crayon-box animate-bounce-in absolute bottom-8">
+                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
                       <h3 className="font-hand font-bold text-2xl text-slate-700 flex items-center gap-2">
                           <Settings className="text-slate-400" size={24}/>
                           Environment Control
@@ -449,22 +442,22 @@ const App: React.FC = () => {
                       <div className="grid grid-cols-4 gap-2">
                           <button 
                             onClick={() => setDebugWeather(WeatherType.SUNNY)}
-                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                               <Sun size={20}/> Sunny
                           </button>
                           <button 
                             onClick={() => setDebugWeather(WeatherType.RAINY)}
-                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                               <CloudDrizzle size={20}/> Rainy
                           </button>
                           <button 
                             onClick={() => setDebugWeather(WeatherType.STORM)}
-                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                               <CloudLightning size={20}/> Storm
                           </button>
                           <button 
                             onClick={() => setDebugWeather(WeatherType.NIGHT)}
-                            className={`p-3 rounded-xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
                               <Moon size={20}/> Night
                           </button>
                       </div>
@@ -473,7 +466,7 @@ const App: React.FC = () => {
               </div>
           ) : (
               <div 
-                  className="bg-white/90 backdrop-blur-md px-6 py-3 rounded-full shadow-xl border-2 border-slate-200 pointer-events-auto flex items-center gap-6 cursor-pointer hover:scale-105 transition-all animate-bounce-in"
+                  className="bg-white/90 backdrop-blur-md px-6 py-4 rounded-full shadow-xl border-2 border-slate-200 pointer-events-auto flex items-center gap-6 cursor-pointer hover:scale-105 transition-all animate-bounce-in absolute bottom-8 crayon-box"
                   onClick={() => setZenPanelOpen(true)}
               >
                   <div className="flex items-center gap-3">
@@ -481,7 +474,7 @@ const App: React.FC = () => {
                   </div>
                   
                   {/* Status Indicators */}
-                  <div className="flex items-center gap-3 text-slate-500 text-sm border-l-2 border-slate-200 pl-6">
+                  <div className="hidden sm:flex items-center gap-3 text-slate-500 text-sm border-l-2 border-slate-200 pl-6">
                         <div className="flex items-center gap-1">
                             {atmosphere.isDay ? <Sun size={16} className="text-orange-400"/> : <Moon size={16} className="text-indigo-400"/>}
                             <span className="font-bold font-hand">{debugHour.toFixed(1)}h</span>
