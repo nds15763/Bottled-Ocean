@@ -285,38 +285,45 @@ const App: React.FC = () => {
                </span>
            </div>
 
-           {/* Ship's Log Card - Compact Sidebar Style */}
-           <div className="bg-white/80 backdrop-blur-sm border-2 border-white/50 p-4 rounded-2xl shadow-sm crayon-box w-full">
-               <h4 className="font-bold text-slate-400 text-[10px] uppercase tracking-widest mb-3 text-center border-b border-slate-100 pb-1">Ship's Log</h4>
+           {/* Ship's Log Card - Split Design */}
+           <div className="bg-white/90 backdrop-blur-sm border-2 border-white/50 rounded-2xl shadow-sm crayon-box w-full flex flex-col">
                
-               <div className="space-y-2 font-hand text-slate-600 text-sm">
-                   <div className="flex items-center justify-between">
-                       <Clock size={14} className="text-sky-500"/>
-                       <span className="font-bold">{currentTime}</span>
-                   </div>
-                   
-                   <div className="flex items-center justify-between">
-                       <Thermometer size={14} className="text-orange-500"/>
-                       <span>{atmosphere.temperature.toFixed(1)}°C</span>
-                   </div>
-
-                   <div className="flex items-center justify-between">
-                       <Wind size={14} className="text-teal-500"/>
-                       <span>{atmosphere.windSpeed} km/h</span>
-                   </div>
-                   
-                   <div className="flex items-center justify-between pt-1">
-                        {atmosphere.type === WeatherType.SUNNY && <Sun size={14} className="text-yellow-500"/>}
-                        {atmosphere.type === WeatherType.RAINY && <CloudRain size={14} className="text-blue-500"/>}
-                        {atmosphere.type === WeatherType.STORM && <CloudLightning size={14} className="text-slate-600"/>}
-                        {atmosphere.type === WeatherType.NIGHT && <Moon size={14} className="text-indigo-500"/>}
-                        <span className="font-bold text-xs uppercase">
-                            {atmosphere.type === WeatherType.SUNNY && "Sunny"}
-                            {atmosphere.type === WeatherType.RAINY && "Rainy"}
-                            {atmosphere.type === WeatherType.STORM && "Storm"}
-                            {atmosphere.type === WeatherType.NIGHT && "Clear"}
+               {/* Top Half: Current Time (Prominent) */}
+               <div className="p-4 border-b-2 border-slate-100/80 flex flex-col items-center justify-center bg-white/40 rounded-t-2xl">
+                    <div className="flex items-center gap-1 text-slate-400 mb-1">
+                        <Clock size={12} />
+                        <span className="text-[10px] uppercase tracking-widest font-bold">Local Time</span>
+                    </div>
+                    <span className="font-hand text-4xl font-bold text-slate-700">{currentTime}</span>
+               </div>
+               
+               {/* Bottom Half: 3-Column Grid for Stats */}
+               <div className="grid grid-cols-3 divide-x divide-slate-100/60 p-2">
+                    {/* Weather */}
+                    <div className="flex flex-col items-center justify-center gap-1 py-1">
+                        {atmosphere.type === WeatherType.SUNNY && <Sun size={18} className="text-yellow-500"/>}
+                        {atmosphere.type === WeatherType.RAINY && <CloudRain size={18} className="text-blue-500"/>}
+                        {atmosphere.type === WeatherType.STORM && <CloudLightning size={18} className="text-slate-600"/>}
+                        {atmosphere.type === WeatherType.NIGHT && <Moon size={18} className="text-indigo-500"/>}
+                        <span className="text-[9px] uppercase font-bold text-slate-500 font-hand tracking-tight">
+                             {atmosphere.type === WeatherType.SUNNY && "Sun"}
+                             {atmosphere.type === WeatherType.RAINY && "Rain"}
+                             {atmosphere.type === WeatherType.STORM && "Storm"}
+                             {atmosphere.type === WeatherType.NIGHT && "Clear"}
                         </span>
-                   </div>
+                    </div>
+
+                    {/* Temp */}
+                    <div className="flex flex-col items-center justify-center gap-1 py-1">
+                        <Thermometer size={18} className="text-orange-500"/>
+                        <span className="text-xs font-bold text-slate-600 font-hand">{atmosphere.temperature.toFixed(0)}°</span>
+                    </div>
+
+                    {/* Wind */}
+                    <div className="flex flex-col items-center justify-center gap-1 py-1">
+                        <Wind size={18} className="text-teal-500"/>
+                        <span className="text-xs font-bold text-slate-600 font-hand">{atmosphere.windSpeed}</span>
+                    </div>
                </div>
            </div>
 
