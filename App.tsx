@@ -7,12 +7,36 @@ import { fetchLocalWeather } from './services/weatherService';
 import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
 import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning } from 'lucide-react';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { Capacitor } from '@capacitor/core';
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
   
   // App State
   const [mode, setMode] = useState<AppMode>(AppMode.MENU);
+  
+  // System Initialization - Lock Landscape & Hide Status Bar
+  useEffect(() => {
+    const initializeSystemSettings = async () => {
+      if (Capacitor.isNativePlatform()) {
+        try {
+          // Lock to Landscape orientation
+          await ScreenOrientation.lock({ orientation: 'landscape' });
+          console.log('Locked to landscape orientation');
+          
+          // Hide status bar for immersive experience
+          await StatusBar.hide();
+          console.log('Status bar hidden');
+        } catch (error) {
+          console.error('Failed to configure system settings:', error);
+        }
+      }
+    };
+    
+    initializeSystemSettings();
+  }, []);
   
   // Weather / Atmosphere State
   const [atmosphere, setAtmosphere] = useState<AtmosphereState>({
