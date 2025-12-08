@@ -273,54 +273,63 @@ const App: React.FC = () => {
   );
 
   const renderFocusing = () => (
-    <div className="absolute inset-0 z-50 pointer-events-none p-6 flex flex-col items-end justify-between">
+    <div className="absolute inset-0 z-50 pointer-events-none p-4 flex flex-col items-end justify-center">
        
-       {/* Top Right Group */}
-       <div className="flex flex-col items-end gap-4 animate-fade-in pointer-events-none">
+       {/* Right Sidebar Column - Fixed Width 200px */}
+       <div className="flex flex-col gap-4 w-[200px] animate-fade-in pointer-events-none h-full py-2 justify-center">
            
-           {/* Timer */}
-           <div className="bg-white/90 backdrop-blur-md px-8 py-3 rounded-3xl text-slate-700 font-hand text-5xl font-bold shadow-xl border-4 border-slate-100 transition-all crayon-box">
-               {formatTime(timeLeft)}
+           {/* Timer Card - Compact */}
+           <div className="bg-white/95 backdrop-blur-md py-3 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box flex justify-center items-center w-full">
+               <span className="text-slate-700 font-hand text-5xl font-bold tracking-widest">
+                 {formatTime(timeLeft)}
+               </span>
            </div>
 
-           {/* Ship's Log */}
-           <div className="bg-white/90 backdrop-blur-md border-2 border-slate-200 p-4 rounded-3xl shadow-lg crayon-box w-40">
-               <h4 className="font-bold text-slate-400 text-xs uppercase tracking-widest mb-3 pb-1 border-b border-slate-100 text-right">Ship's Log</h4>
+           {/* Ship's Log Card - Compact Sidebar Style */}
+           <div className="bg-white/80 backdrop-blur-sm border-2 border-white/50 p-4 rounded-2xl shadow-sm crayon-box w-full">
+               <h4 className="font-bold text-slate-400 text-[10px] uppercase tracking-widest mb-3 text-center border-b border-slate-100 pb-1">Ship's Log</h4>
                
-               <div className="space-y-2 font-hand text-slate-700 text-sm flex flex-col items-end">
-                   <div className="flex items-center gap-2">
-                       <span className="font-bold text-base">{currentTime}</span>
-                       <Clock size={16} className="text-sky-500"/>
+               <div className="space-y-2 font-hand text-slate-600 text-sm">
+                   <div className="flex items-center justify-between">
+                       <Clock size={14} className="text-sky-500"/>
+                       <span className="font-bold">{currentTime}</span>
                    </div>
                    
-                   <div className="flex items-center gap-2">
+                   <div className="flex items-center justify-between">
+                       <Thermometer size={14} className="text-orange-500"/>
                        <span>{atmosphere.temperature.toFixed(1)}°C</span>
-                       <Thermometer size={16} className="text-orange-500"/>
                    </div>
 
-                   <div className="flex items-center gap-2">
+                   <div className="flex items-center justify-between">
+                       <Wind size={14} className="text-teal-500"/>
                        <span>{atmosphere.windSpeed} km/h</span>
-                       <Wind size={16} className="text-teal-500"/>
                    </div>
                    
-                   <div className="flex items-center gap-2">
-                        {atmosphere.type === WeatherType.SUNNY && <><span>Sunny</span><Sun size={16} className="text-yellow-500"/></>}
-                        {atmosphere.type === WeatherType.RAINY && <><span>Rainy</span><CloudRain size={16} className="text-blue-500"/></>}
-                        {atmosphere.type === WeatherType.STORM && <><span>Storm</span><CloudLightning size={16} className="text-slate-600"/></>}
-                        {atmosphere.type === WeatherType.NIGHT && <><span>Clear</span><Moon size={16} className="text-indigo-500"/></>}
+                   <div className="flex items-center justify-between pt-1">
+                        {atmosphere.type === WeatherType.SUNNY && <Sun size={14} className="text-yellow-500"/>}
+                        {atmosphere.type === WeatherType.RAINY && <CloudRain size={14} className="text-blue-500"/>}
+                        {atmosphere.type === WeatherType.STORM && <CloudLightning size={14} className="text-slate-600"/>}
+                        {atmosphere.type === WeatherType.NIGHT && <Moon size={14} className="text-indigo-500"/>}
+                        <span className="font-bold text-xs uppercase">
+                            {atmosphere.type === WeatherType.SUNNY && "Sunny"}
+                            {atmosphere.type === WeatherType.RAINY && "Rainy"}
+                            {atmosphere.type === WeatherType.STORM && "Storm"}
+                            {atmosphere.type === WeatherType.NIGHT && "Clear"}
+                        </span>
                    </div>
                </div>
            </div>
-       </div>
-       
-       {/* Bottom Right: Warning */}
-       <div className="w-full max-w-xs pointer-events-none">
-            <div className="bg-orange-50/90 text-orange-800 px-6 py-4 rounded-3xl shadow-lg border-2 border-orange-200 text-center crayon-box">
-                <p className="font-bold text-xl font-hand mb-1 flex items-center justify-center gap-2">
+
+           {/* Spacer */}
+           <div className="flex-1"></div>
+           
+           {/* Bottom Warning Note - Same Width as Sidebar */}
+           <div className="bg-orange-50/90 text-orange-800 p-3 rounded-2xl shadow-lg border-2 border-orange-200 text-center crayon-box w-full">
+                <p className="font-bold text-base font-hand mb-1 flex items-center justify-center gap-2">
                     ⚠️ Don't Touch!
                 </p>
-                <p className="text-xs font-hand opacity-80">Line will break if you touch screen.</p>
-            </div>
+                <p className="text-[10px] font-hand opacity-80 leading-tight">Focus on your task. Touching screen breaks the line.</p>
+           </div>
        </div>
 
        {/* Trap layer for interaction penalty */}
