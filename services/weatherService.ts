@@ -38,16 +38,16 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
         finalType = WeatherType.NIGHT;
     }
 
-    // --- Wave Logic ---
-    // Wind maps to amplitude. 
-    // 0 Wind -> 2px. 100 Wind -> 52px.
-    let waveAmp = 2 + (windKmh * 0.5);
-    if (waveAmp > 50) waveAmp = 50; // Cap
+    // --- Wave Logic (Capped at 50km/h for physics scale) ---
+    const effectiveWind = Math.min(windKmh, 50);
+
+    // Wind maps to amplitude. 1:1 Mapping.
+    // If wind is 0, keep it bare minimum 0.5 for life.
+    let waveAmp = effectiveWind === 0 ? 0.5 : effectiveWind;
 
     // Wind maps to speed
-    // 0 Wind -> 0.05. 100 Wind -> 1.25.
-    let waveSpeed = 0.05 + (windKmh * 0.012);
-    if (waveSpeed > 1.3) waveSpeed = 1.3;
+    // 0 Wind -> 0.05. 50 Wind -> 1.25.
+    let waveSpeed = 0.05 + (effectiveWind / 50) * 1.15;
 
     // Storm overrides
     let lightning = false;
@@ -75,7 +75,7 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
       localHour,
       waveAmp,
       waveSpeed,
-      windSpeed: windKmh,
+      windSpeed: windKmh, // Display real wind
       temperature: temp,
       hasRainbow,
       isDay,
@@ -88,9 +88,9 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
     return {
       type: WeatherType.SUNNY,
       localHour,
-      waveAmp: 10,
-      waveSpeed: 0.5,
-      windSpeed: 10,
+      waveAmp: 5,
+      waveSpeed: 0.2,
+      windSpeed: 5,
       temperature: 20,
       hasRainbow: false,
       isDay: true,

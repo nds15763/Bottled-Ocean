@@ -27,20 +27,26 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     velocityX: 0, 
     velocityY: 0 
   });
-  const timeRef = useRef(0);
-  const lightningRef = useRef(0); // Timer for lightning flash
   
-  // Store clouds with relative Y positions (0.0 to 0.4 of screen height)
-  // And accumulate X position manually to avoid speed-change jumps
+  // Timers and Accumulators
+  const timeRef = useRef(0);         // Global steady clock for sun/smoke (independent of wind)
+  const wavePhaseRef = useRef(0);    // Accumulated wave travel distance (prevents jumps)
+  const lightningRef = useRef(0);    // Timer for lightning flash
+  
+  // Store clouds
   const cloudsRef = useRef<{x: number, yPct: number, scale: number, type: number}[]>([]);
   
   // Generate clouds once
   useEffect(() => {
-    cloudsRef.current = Array.from({ length: 6 }).map(() => ({
-      x: Math.random() * 2000, 
-      yPct: Math.random() * 0.35 + 0.05, // Top 5% to 40% of screen
-      scale: 0.8 + Math.random() * 0.5,
-      type: Math.floor(Math.random() * 3)
+    // Generate 4 clouds distributed horizontally to prevent stacking
+    const count = 4;
+    const spacing = 400; // Base spacing
+    cloudsRef.current = Array.from({ length: count }).map((_, i) => ({
+      // Start spaced out: e.g. 0, 400, 800, 1200 + random jitter
+      x: (i * spacing) + (Math.random() * 200), 
+      yPct: Math.random() * 0.3 + 0.05, // Top 5% to 35% of screen
+      scale: 0.8 + Math.random() * 0.4,
+      type: i % 3 // Cycle through 0, 1, 2 types
     }));
   }, []);
 
@@ -74,12 +80,19 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     const noisePattern = createNoisePattern(ctx);
 
     const render = () => {
-      // Global time increments constantly for wave phases, sun rotation, etc.
-      // Independent of wind speed to prevent jitter.
-      timeRef.current += 0.01;
       const width = canvas.width;
       const height = canvas.height;
+      
+      // 1. Time & Phase Accumulation
+      // Constant time for steady animations (Sun breathing, Smoke puffs)
+      timeRef.current += 0.01;
       const t = timeRef.current;
+
+      // Accumulate Wave Phase based on current speed
+      // This prevents "Jumping" when speed changes dynamically
+      // Speed factor adjusted for visual feel (0.05 is base multiplier)
+      wavePhaseRef.current += atmosphere.waveSpeed * 0.05;
+      const wavePhase = wavePhaseRef.current;
 
       // Lightning Logic
       if (atmosphere.lightning && Math.random() < 0.005) {
@@ -90,7 +103,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       // --- Physics Update ---
       const ship = shipRef.current;
       
-      // Horizontal
+      // Horizontal Movement
       let effectiveTilt = tilt;
       if (Math.abs(effectiveTilt) < 0.05) effectiveTilt = 0;
       const targetVelX = effectiveTilt * 8;
@@ -102,23 +115,22 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       if (ship.x < padding) { ship.x = padding; ship.velocityX *= -0.2; }
       if (ship.x > width - padding) { ship.x = width - padding; ship.velocityX *= -0.2; }
 
-      // Vertical (Using Dynamic Atmosphere Params)
+      // Vertical (Wave Following)
       const waveLayerIndex = 1; 
       const waveBaseYOffset = 20;
-      // DYNAMIC: Use atmosphere.waveAmp and atmosphere.waveSpeed
-      const waveAmp = atmosphere.waveAmp * 1.2; // Mid layer usually slightly higher amp
-      const waveSpeed = atmosphere.waveSpeed;
-      const waveFreq = 0.0015; // Lower frequency for smoother/wider waves
+      const waveAmp = atmosphere.waveAmp * 1.2; 
+      const waveFreq = 0.0015; 
       
-      const wavePhase = ship.x * waveFreq + t * waveSpeed + waveLayerIndex;
-      const waterHeightAtShip = Math.sin(wavePhase) * waveAmp;
+      // Calculate ship Y based on the accumulated phase
+      const shipWavePhase = ship.x * waveFreq + wavePhase + waveLayerIndex;
+      const waterHeightAtShip = Math.sin(shipWavePhase) * waveAmp;
       
       const waterBaseY = height * 0.6 + waveBaseYOffset;
       const shipDraft = 10; 
       ship.y = waterBaseY + waterHeightAtShip - shipDraft;
 
-      // Rotation
-      const waveSlope = waveAmp * waveFreq * Math.cos(wavePhase);
+      // Rotation (Tangent to wave)
+      const waveSlope = waveAmp * waveFreq * Math.cos(shipWavePhase);
       let targetAngle = Math.atan(waveSlope);
       targetAngle += (ship.velocityX * 0.005);
       ship.angle += (targetAngle - ship.angle) * 0.1;
@@ -127,31 +139,24 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       // --- Drawing ---
       ctx.clearRect(0, 0, width, height);
 
-      // 1. SKY (Dynamic 4-Stage Gradient)
+      // 1. SKY
       const hour = atmosphere.localHour;
       let skyColor1, skyColor2;
 
-      // Storm Override
       if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
            skyColor1 = '#7f8c8d'; skyColor2 = '#2c3e50';
       } else {
-           // Clear sky interpolation
            if (hour < 5 || hour >= 20) {
-               // Night
                skyColor1 = '#1a252f'; skyColor2 = '#000000';
            } else if (hour >= 5 && hour < 7) {
-               // Dawn (Purple to Orange)
                skyColor1 = '#8E44AD'; skyColor2 = '#E67E22';
            } else if (hour >= 7 && hour < 17) {
-               // Day (Blue to Light Blue)
                skyColor1 = '#5B9BD5'; skyColor2 = '#82B4E3';
            } else {
-               // Dusk (Orange to Purple/Dark Blue)
                skyColor1 = '#D35400'; skyColor2 = '#2C3E50';
            }
       }
       
-      // Flash effect
       if (lightningRef.current > 0) {
           skyColor1 = '#ffffff'; skyColor2 = '#bdc3c7';
       }
@@ -162,10 +167,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       ctx.fillStyle = grad;
       ctx.fillRect(0,0,width,height);
 
-      // 2. CELESTIAL BODIES (Orbit Logic)
+      // 2. CELESTIAL BODIES
       ctx.save();
       
-      // Rainbow
       if (atmosphere.hasRainbow) {
           ctx.globalCompositeOperation = 'screen';
           ctx.globalAlpha = 0.6;
@@ -185,19 +189,16 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.globalCompositeOperation = 'source-over';
       }
 
-      // Celestial Orbit Calculation
       const drawCelestial = (type: 'SUN' | 'MOON') => {
-           let progress = 0; // 0 to 1
+           let progress = 0; 
            let isVisible = false;
 
            if (type === 'SUN') {
-               // 6 to 18
                if (hour >= 5 && hour <= 19) {
                    progress = (hour - 5) / 14; 
                    isVisible = true;
                }
            } else {
-               // 17 to 24, or 0 to 7
                if (hour >= 17) {
                    progress = (hour - 17) / 14;
                    isVisible = true;
@@ -209,22 +210,19 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
            if (isVisible) {
                const cx = width * progress;
-               // Parabola: y = 4 * h * x * (1-x) 
-               // Invert for canvas Y (0 is top)
-               const orbitHeight = height * 0.7; // How high it goes
+               const orbitHeight = height * 0.7; 
                const topMargin = height * 0.1;
                const cy = height - (Math.sin(progress * Math.PI) * orbitHeight) - topMargin;
                
                ctx.translate(cx, cy);
 
                if (type === 'SUN') {
-                   // Draw Sun
                    ctx.strokeStyle = '#E74C3C';
                    ctx.lineWidth = 4;
                    ctx.setLineDash([10, 10]);
                    ctx.beginPath();
                    for(let i=0; i<8; i++) {
-                       const ang = (i/8)*Math.PI*2 + t * 0.1; // Independent rotation
+                       const ang = (i/8)*Math.PI*2 + t * 0.1; 
                        ctx.moveTo(Math.cos(ang)*50, Math.sin(ang)*50);
                        ctx.lineTo(Math.cos(ang)*70, Math.sin(ang)*70);
                    }
@@ -233,29 +231,24 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    
                    ctx.fillStyle = '#E74C3C';
                    ctx.beginPath();
-                   const r = 45 + Math.sin(t*2)*2; // Breathing independently
+                   const r = 45 + Math.sin(t*2)*2; 
                    ctx.arc(0, 0, r, 0, Math.PI*2);
                    ctx.fill();
                } else {
-                   // Draw Moon
-                   ctx.rotate(-0.5); // Tilt
+                   ctx.rotate(-0.5); 
                    ctx.fillStyle = '#F1C40F';
                    ctx.beginPath();
                    ctx.arc(0, 0, 40, 0, Math.PI*2);
                    ctx.fill();
-                   // Crater texture
                    if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
                }
-               // Reset
                ctx.translate(-cx, -cy);
            }
       };
 
-      // Only draw sun if NOT rainy/stormy
       if (atmosphere.type === WeatherType.SUNNY) {
           drawCelestial('SUN');
       } 
-      // Always try to draw moon if it's night time logic, unless forced storm
       if (atmosphere.type === WeatherType.NIGHT || (!atmosphere.isDay && atmosphere.type !== WeatherType.STORM)) {
           drawCelestial('MOON');
       }
@@ -267,32 +260,46 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ? '#95a5a6' 
           : '#ECF0F1'; 
 
-      // Update cloud positions (Delta movement)
       const windFactor = atmosphere.windSpeed ? (atmosphere.windSpeed / 20) : 0;
-      // Base speed is very slow (0.1) + wind influence
       const cloudMoveSpeed = 0.1 + windFactor; 
 
       cloudsRef.current.forEach((cloud) => {
-          // Increment position
+          // Delta movement
           cloud.x += cloudMoveSpeed;
-          // Wrap around
+          // Wrap around logic with ample buffer to ensure they start off-screen right
           if (cloud.x > width + 200) cloud.x = -200;
 
           let cx = cloud.x;
-          let cy = cloud.yPct * height; // Fixed height relative to screen
+          let cy = cloud.yPct * height; 
 
           ctx.save();
           ctx.translate(cx, cy);
           ctx.scale(cloud.scale, cloud.scale);
           ctx.beginPath();
-          ctx.arc(0, 0, 30, 0, Math.PI*2);
-          ctx.arc(25, -10, 35, 0, Math.PI*2);
-          ctx.arc(50, 0, 30, 0, Math.PI*2);
+          
+          if (cloud.type === 0) {
+              // Classic Puff
+              ctx.arc(0, 0, 30, 0, Math.PI*2);
+              ctx.arc(25, -10, 35, 0, Math.PI*2);
+              ctx.arc(50, 0, 30, 0, Math.PI*2);
+          } else if (cloud.type === 1) {
+              // Long Flat
+              ctx.arc(0, 0, 25, 0, Math.PI*2);
+              ctx.arc(40, -5, 30, 0, Math.PI*2);
+              ctx.arc(80, 0, 25, 0, Math.PI*2);
+              ctx.rect(0, 0, 80, 20); // Flat bottom fill
+          } else {
+              // Big Fluffy
+              ctx.arc(0, 0, 40, 0, Math.PI*2);
+              ctx.arc(40, -20, 50, 0, Math.PI*2);
+              ctx.arc(80, 0, 40, 0, Math.PI*2);
+              ctx.arc(40, 20, 40, 0, Math.PI*2);
+          }
+          
           ctx.fill();
           ctx.restore();
       });
       
-      // Lightning Bolt drawing
       if (lightningRef.current > 5) {
           ctx.save();
           ctx.strokeStyle = '#FFF';
@@ -312,14 +319,13 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.restore();
       }
 
-      // 4. WATER LAYERS (Dynamic)
+      // 4. WATER LAYERS (Accumulated Phase)
       const layers = [
-          { color: '#5DADE2', yOff: 0, amp: atmosphere.waveAmp, speed: atmosphere.waveSpeed * 0.8 }, 
-          { color: '#3498DB', yOff: 20, amp: atmosphere.waveAmp * 1.2, speed: atmosphere.waveSpeed }, 
-          { color: '#2980B9', yOff: 45, amp: atmosphere.waveAmp, speed: atmosphere.waveSpeed * 1.2 },  
+          { color: '#5DADE2', yOff: 0, ampMult: 1.0, speedRatio: 0.8 }, 
+          { color: '#3498DB', yOff: 20, ampMult: 1.2, speedRatio: 1.0 }, 
+          { color: '#2980B9', yOff: 45, ampMult: 1.0, speedRatio: 1.2 },  
       ];
 
-      // Dusk/Night overrides for water color
       if (hour >= 18 || hour < 6 || atmosphere.type === WeatherType.NIGHT) {
           layers[0].color = '#2471A3';
           layers[1].color = '#1A5276';
@@ -329,7 +335,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           layers[1].color = '#455A64';
           layers[2].color = '#37474F';
       } else if (hour >= 17 && hour < 18) {
-          // Sunset reflection
           layers[0].color = '#EB984E';
           layers[1].color = '#D35400';
           layers[2].color = '#A04000';
@@ -342,11 +347,15 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.moveTo(0, height);
           ctx.lineTo(0, baseY);
           
-          const freq = 0.0015; // Lower freq for smoother look
+          const freq = 0.0015; 
+          const layerAmp = atmosphere.waveAmp * layer.ampMult;
           
-          // Draw slightly past width to prevent right-edge gaps
+          // Use accumulated phase + x-offset
+          // phase = wavePhaseRef.current * layer.speedRatio
+          const currentPhase = wavePhaseRef.current * layer.speedRatio + i;
+
           for(let x=0; x<=width + 20; x+=10) {
-              const y = baseY + Math.sin(x * freq + t * layer.speed + i) * layer.amp;
+              const y = baseY + Math.sin(x * freq + currentPhase) * layerAmp;
               ctx.lineTo(x, y);
           }
           
@@ -367,6 +376,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           }
 
           if (i === 1) {
+              // Pass the independent 't' for smoke/sun animations
               renderShip(ctx, ship, t, width, height, isFishing, caughtFishColor, noisePattern);
           }
       });
@@ -379,9 +389,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           const rainCount = atmosphere.type === WeatherType.STORM ? 100 : 40;
           const rainSpeed = atmosphere.type === WeatherType.STORM ? 50 : 25;
           for(let i=0; i<rainCount; i++) {
+              // Use t for rain cycle, wrapped
               const rx = (Math.random() * width * 1.5) - (t * 400 % width);
               const ry = Math.random() * height;
-              // Wind affects rain angle
               const windTilt = atmosphere.windSpeed * 0.5;
               ctx.moveTo(rx, ry);
               ctx.lineTo(rx - 8 - windTilt, ry + rainSpeed);
@@ -441,6 +451,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         ctx.fillStyle = '#E74C3C'; 
         ctx.fillRect(0, -40, 12, 4);
 
+        // Smoke (Uses independent t)
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         const smokeY = -45 - Math.sin(t*3)*3;
         ctx.beginPath();
@@ -495,7 +506,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
     const handleResize = () => {
         if (containerRef.current && canvasRef.current) {
-            // Slight buffer to prevent rounding errors
             canvasRef.current.width = containerRef.current.clientWidth;
             canvasRef.current.height = containerRef.current.clientHeight;
         }

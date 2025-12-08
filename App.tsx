@@ -18,9 +18,9 @@ const App: React.FC = () => {
   const [atmosphere, setAtmosphere] = useState<AtmosphereState>({
       type: WeatherType.SUNNY,
       localHour: 12,
-      waveAmp: 15,
-      waveSpeed: 0.8,
-      windSpeed: 5,
+      waveAmp: 1, // Default 1px
+      waveSpeed: 0.1,
+      windSpeed: 1, // Default 1
       temperature: 24,
       hasRainbow: false,
       isDay: true,
@@ -33,7 +33,7 @@ const App: React.FC = () => {
   
   // Debug / Zen State
   const [debugHour, setDebugHour] = useState(12);
-  const [debugWind, setDebugWind] = useState(10);
+  const [debugWind, setDebugWind] = useState(1); // Default to 1
   const [debugWeather, setDebugWeather] = useState<WeatherType>(WeatherType.SUNNY);
   const [zenPanelOpen, setZenPanelOpen] = useState(false);
 
@@ -84,16 +84,18 @@ const App: React.FC = () => {
   // Debug / Zen Mode Effect
   useEffect(() => {
     if (mode === AppMode.ZEN) {
-        // Calculate physics based on debug sliders
+        // Calculate physics based on debug sliders (Max wind 50)
         
-        // Amplitude: 0 Wind -> 2px (Calm). 100 Wind -> 52px (Huge)
-        let waveAmp = 2 + (debugWind * 0.5); 
-        if (waveAmp > 60) waveAmp = 60; // Cap
-
-        // Speed: 0 Wind -> 0.05 (Almost static). 100 Wind -> 1.25 (Fast but not glitchy)
-        let waveSpeed = 0.05 + (debugWind * 0.012);
-        if (waveSpeed > 1.3) waveSpeed = 1.3;
-
+        // Amplitude: 1:1 Mapping. Wind 1 = 1px.
+        // If wind is 0, give it a tiny bit of life (0.5)
+        let waveAmp = debugWind === 0 ? 0.5 : debugWind;
+        
+        // Speed: Map 0-50 wind to sensible speed range
+        // Wind 0 = 0.05 (Static breathing)
+        // Wind 1 = 0.08 (Very slow)
+        // Wind 50 = 1.2 (Fast)
+        let waveSpeed = 0.05 + (debugWind / 50) * 1.15;
+        
         // Storm overrides
         let isStorm = debugWeather === WeatherType.STORM;
         if (isStorm) {
@@ -436,7 +438,7 @@ const App: React.FC = () => {
                           </div>
                           <input 
                             type="range" 
-                            min="0" max="100" step="1" 
+                            min="0" max="50" step="1" 
                             value={debugWind}
                             onChange={(e) => setDebugWind(parseInt(e.target.value))}
                             className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
