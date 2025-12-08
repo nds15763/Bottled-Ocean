@@ -1,27 +1,34 @@
+
 import React, { useRef, useEffect } from 'react';
-import { ShipState, WeatherType } from '../types';
+import { ShipState, WeatherType, AtmosphereState } from '../types';
 
 interface SimulationCanvasProps {
   tilt: number;
-  weather: WeatherType;
+  atmosphere: AtmosphereState;
   isFishing: boolean;
   caughtFishColor?: string | null;
-  mode: string;
 }
 
 const SimulationCanvas: React.FC<SimulationCanvasProps> = ({ 
   tilt, 
-  weather, 
+  atmosphere, 
   isFishing,
-  caughtFishColor,
-  mode
+  caughtFishColor
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Physics State
-  const shipRef = useRef<ShipState>({ x: 0, y: 0, angle: 0, velocityX: 0, velocityY: 0 });
+  const shipRef = useRef<ShipState & { targetAngle: number }>({ 
+    x: 0, 
+    y: 0, 
+    angle: 0, 
+    targetAngle: 0,
+    velocityX: 0, 
+    velocityY: 0 
+  });
   const timeRef = useRef(0);
+  const lightningRef = useRef(0); // Timer for lightning flash
   const cloudsRef = useRef<{x: number, y: number, scale: number, type: number}[]>([]);
   
   // Generate clouds once
@@ -42,11 +49,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     const c = canvas.getContext('2d');
     if (!c) return null;
     
-    // Fill white
     c.fillStyle = '#ffffff';
     c.fillRect(0,0,100,100);
     
-    // Add noise
     for(let i=0; i<500; i++) {
         c.fillStyle = `rgba(0,0,0,${Math.random() * 0.1})`;
         c.beginPath();
@@ -63,7 +68,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
     if (!canvas || !ctx) return;
 
-    // Initialize Texture Pattern
     const noisePattern = createNoisePattern(ctx);
 
     const render = () => {
@@ -72,66 +76,114 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const height = canvas.height;
       const t = timeRef.current;
 
+      // Lightning Logic
+      if (atmosphere.lightning && Math.random() < 0.005) {
+          lightningRef.current = 10; // Flash for 10 frames
+      }
+      if (lightningRef.current > 0) lightningRef.current--;
+
       // --- Physics Update ---
       const ship = shipRef.current;
       
-      // Ship moves based on tilt (gravity)
-      const targetVelX = tilt * 15;
-      ship.velocityX += (targetVelX - ship.velocityX) * 0.05;
+      // Horizontal
+      let effectiveTilt = tilt;
+      if (Math.abs(effectiveTilt) < 0.05) effectiveTilt = 0;
+      const targetVelX = effectiveTilt * 8;
+      ship.velocityX += (targetVelX - ship.velocityX) * 0.08;
+      ship.velocityX *= 0.95; 
       ship.x += ship.velocityX;
-
-      // Boundary check
-      if (ship.x < 100) { ship.x = 100; ship.velocityX *= -0.5; }
-      if (ship.x > width - 100) { ship.x = width - 100; ship.velocityX *= -0.5; }
-
-      // Wave calculation for ship height/angle
-      // We simulate the "Main" wave layer for ship physics
-      const waveFreq = 0.002;
-      const waveAmp = 20;
-      const waveY = Math.sin(ship.x * waveFreq + t * 2) * waveAmp + (Math.sin(ship.x * 0.01 + t) * 10);
       
-      const targetY = height * 0.6 + waveY - 20;
-      ship.y += (targetY - ship.y) * 0.1;
+      const padding = 80;
+      if (ship.x < padding) { ship.x = padding; ship.velocityX *= -0.2; }
+      if (ship.x > width - padding) { ship.x = width - padding; ship.velocityX *= -0.2; }
 
-      // Calculate angle based on wave slope
-      const nextY = Math.sin((ship.x + 5) * waveFreq + t * 2) * waveAmp;
-      const slope = (nextY - waveY) / 5;
-      const targetAngle = Math.atan(slope) + (ship.velocityX * 0.002);
+      // Vertical (Using Dynamic Atmosphere Params)
+      const waveLayerIndex = 1; 
+      const waveBaseYOffset = 20;
+      // DYNAMIC: Use atmosphere.waveAmp and atmosphere.waveSpeed
+      const waveAmp = atmosphere.waveAmp * 1.2; // Mid layer usually slightly higher amp
+      const waveSpeed = atmosphere.waveSpeed;
+      const waveFreq = 0.002;
+      
+      const wavePhase = ship.x * waveFreq + t * waveSpeed + waveLayerIndex;
+      const waterHeightAtShip = Math.sin(wavePhase) * waveAmp;
+      
+      const waterBaseY = height * 0.6 + waveBaseYOffset;
+      const shipDraft = 10; 
+      ship.y = waterBaseY + waterHeightAtShip - shipDraft;
+
+      // Rotation
+      const waveSlope = waveAmp * waveFreq * Math.cos(wavePhase);
+      let targetAngle = Math.atan(waveSlope);
+      targetAngle += (ship.velocityX * 0.005);
       ship.angle += (targetAngle - ship.angle) * 0.1;
+
 
       // --- Drawing ---
       ctx.clearRect(0, 0, width, height);
 
       // 1. SKY
       let skyColor1, skyColor2;
-      if (weather === WeatherType.NIGHT) {
-          skyColor1 = '#2c3e50'; skyColor2 = '#000000';
-      } else if (weather === WeatherType.RAINY) {
-          skyColor1 = '#bdc3c7'; skyColor2 = '#2c3e50';
+      
+      // Determine time of day / sky gradient
+      const hour = new Date().getHours(); 
+      // Simplified mapping based on isDay flag for now, or just use the passed colors
+      if (atmosphere.type === WeatherType.NIGHT) {
+          skyColor1 = '#1a252f'; skyColor2 = '#000000';
+      } else if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
+          skyColor1 = '#7f8c8d'; skyColor2 = '#2c3e50';
       } else {
-          skyColor1 = '#5B9BD5'; skyColor2 = '#82B4E3'; // Crayon Blue
+          // Dawn/Dusk handled by WeatherService via 'type', but let's stick to standard Blue for Sunny
+          // We can improve this if we pass 'localHour'
+           skyColor1 = '#5B9BD5'; skyColor2 = '#82B4E3'; 
       }
+      
+      // Flash effect
+      if (lightningRef.current > 0) {
+          skyColor1 = '#ffffff'; skyColor2 = '#bdc3c7';
+      }
+
       const grad = ctx.createLinearGradient(0, 0, 0, height);
       grad.addColorStop(0, skyColor1);
       grad.addColorStop(1, skyColor2);
       ctx.fillStyle = grad;
       ctx.fillRect(0,0,width,height);
 
-      // 2. CELESTIAL BODY
+      // 2. CELESTIAL BODY / RAINBOW
       ctx.save();
-      if (weather === WeatherType.NIGHT) {
-          // Moon
+      
+      // Rainbow (Behind Sun/Moon)
+      if (atmosphere.hasRainbow) {
+          ctx.globalCompositeOperation = 'screen';
+          ctx.globalAlpha = 0.6;
+          const cx = width * 0.5;
+          const cy = height * 0.9;
+          const r = Math.min(width, height) * 0.8;
+          const colors = ['#FF0000', '#FF7F00', '#FFFF00', '#00FF00', '#0000FF', '#4B0082', '#9400D3'];
+          
+          colors.forEach((c, i) => {
+             ctx.beginPath();
+             ctx.arc(cx, cy, r - i * 10, Math.PI, 0);
+             ctx.strokeStyle = c;
+             ctx.lineWidth = 10;
+             ctx.stroke(); 
+          });
+          ctx.globalAlpha = 1.0;
+          ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // Moon / Sun
+      // Simplistic position for now, or we can use the 'localHour' if available in future
+      if (atmosphere.type === WeatherType.NIGHT) {
           ctx.translate(width * 0.8, height * 0.2);
           ctx.fillStyle = '#F1C40F';
           ctx.beginPath();
           ctx.arc(0, 0, 40, 0, Math.PI*2);
           ctx.fill();
-          // Texture overlay
           if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
-      } else if (weather === WeatherType.SUNNY) {
-          // Red Sun (Paper Cutout Style)
+      } else if (atmosphere.type === WeatherType.SUNNY) {
           ctx.translate(width * 0.8, height * 0.2);
-          // Rays
+          
           ctx.strokeStyle = '#E74C3C';
           ctx.lineWidth = 4;
           ctx.setLineDash([10, 10]);
@@ -144,7 +196,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.stroke();
           ctx.setLineDash([]);
           
-          // Sun Body
           ctx.fillStyle = '#E74C3C';
           ctx.beginPath();
           const r = 45 + Math.sin(t*2)*2;
@@ -154,68 +205,87 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       }
       ctx.restore();
 
-      // 3. CLOUDS (Blobs)
-      ctx.fillStyle = '#ECF0F1'; // Off white
+      // 3. CLOUDS
+      ctx.fillStyle = (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) 
+          ? '#95a5a6' 
+          : '#ECF0F1'; 
+
       cloudsRef.current.forEach((cloud, i) => {
-          let cx = (cloud.x + t * 10) % (width + 400) - 200;
+          let speed = atmosphere.windSpeed ? (atmosphere.windSpeed / 20) : 0.5;
+          let cx = (cloud.x + t * speed * 10) % (width + 400) - 200; 
           let cy = cloud.y;
-          
           ctx.save();
           ctx.translate(cx, cy);
           ctx.scale(cloud.scale, cloud.scale);
-          
-          // Draw Cloud Blob
           ctx.beginPath();
           ctx.arc(0, 0, 30, 0, Math.PI*2);
           ctx.arc(25, -10, 35, 0, Math.PI*2);
           ctx.arc(50, 0, 30, 0, Math.PI*2);
           ctx.fill();
-          
-          // Add subtle shadow/texture
-          ctx.strokeStyle = '#BDC3C7';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          
           ctx.restore();
       });
+      
+      // Lightning Bolt drawing
+      if (lightningRef.current > 5) {
+          ctx.save();
+          ctx.strokeStyle = '#FFF';
+          ctx.lineWidth = 3;
+          ctx.shadowBlur = 20;
+          ctx.shadowColor = '#FFF';
+          ctx.beginPath();
+          let lx = Math.random() * width;
+          let ly = 0;
+          ctx.moveTo(lx, ly);
+          while(ly < height * 0.7) {
+              lx += (Math.random() - 0.5) * 50;
+              ly += Math.random() * 50;
+              ctx.lineTo(lx, ly);
+          }
+          ctx.stroke();
+          ctx.restore();
+      }
 
-      // 4. WATER LAYERS (Paper Waves)
+      // 4. WATER LAYERS (Dynamic)
       const layers = [
-          { color: '#2980B9', yOff: 40, amp: 25, speed: 1.0 }, // Back
-          { color: '#3498DB', yOff: 20, amp: 30, speed: 1.2 }, // Mid
-          { color: '#5DADE2', yOff: 0, amp: 20, speed: 0.8 },  // Front (Ship sits here)
+          { color: '#5DADE2', yOff: 0, amp: atmosphere.waveAmp, speed: atmosphere.waveSpeed * 0.8 }, 
+          { color: '#3498DB', yOff: 20, amp: atmosphere.waveAmp * 1.2, speed: atmosphere.waveSpeed }, 
+          { color: '#2980B9', yOff: 45, amp: atmosphere.waveAmp, speed: atmosphere.waveSpeed * 1.2 },  
       ];
 
-      if (weather === WeatherType.NIGHT) {
-          layers[0].color = '#1A5276';
-          layers[1].color = '#2471A3';
-          layers[2].color = '#2980B9';
+      if (atmosphere.type === WeatherType.NIGHT) {
+          layers[0].color = '#2471A3';
+          layers[1].color = '#1A5276';
+          layers[2].color = '#154360';
+      } else if (atmosphere.type === WeatherType.STORM) {
+          layers[0].color = '#546E7A';
+          layers[1].color = '#455A64';
+          layers[2].color = '#37474F';
       }
 
       layers.forEach((layer, i) => {
           ctx.fillStyle = layer.color;
           ctx.beginPath();
           const baseY = height * 0.6 + layer.yOff;
-          
           ctx.moveTo(0, height);
           ctx.lineTo(0, baseY);
           
-          // Draw Sine Wave
-          for(let x=0; x<=width; x+=10) {
-              const y = baseY + Math.sin(x * 0.003 + t * layer.speed + i) * layer.amp;
+          const freq = 0.002;
+          
+          // Draw slightly past width to prevent right-edge gaps
+          for(let x=0; x<=width + 20; x+=10) {
+              const y = baseY + Math.sin(x * freq + t * layer.speed + i) * layer.amp;
               ctx.lineTo(x, y);
           }
           
-          ctx.lineTo(width, height);
+          ctx.lineTo(width + 20, height);
+          ctx.lineTo(0, height);
           ctx.closePath();
           ctx.fill();
 
-          // Top edge highlight (Paper thickness)
-          ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+          ctx.strokeStyle = 'rgba(255,255,255,0.2)';
           ctx.lineWidth = 2;
           ctx.stroke();
 
-          // Texture
           if (noisePattern) {
               ctx.fillStyle = noisePattern;
               ctx.globalAlpha = 0.1;
@@ -223,23 +293,25 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
               ctx.globalAlpha = 1.0;
           }
 
-          // Draw Ship after the 2nd layer (so it sits inside/behind front wave)
           if (i === 1) {
               renderShip(ctx, ship, t, width, height, isFishing, caughtFishColor, noisePattern);
           }
       });
 
-      // 5. WEATHER OVERLAYS
-      if (weather === WeatherType.RAINY) {
+      // 5. PRECIPITATION
+      if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
-          ctx.lineWidth = 2;
+          ctx.lineWidth = 1.5;
           ctx.beginPath();
-          for(let i=0; i<50; i++) {
-              const rx = (Math.random() * width * 1.5) - (t * 500 % width);
+          const rainCount = atmosphere.type === WeatherType.STORM ? 100 : 40;
+          const rainSpeed = atmosphere.type === WeatherType.STORM ? 50 : 25;
+          for(let i=0; i<rainCount; i++) {
+              const rx = (Math.random() * width * 1.5) - (t * 400 % width);
               const ry = Math.random() * height;
-              // Rain slant
+              // Wind affects rain angle
+              const windTilt = atmosphere.windSpeed * 0.5;
               ctx.moveTo(rx, ry);
-              ctx.lineTo(rx - 10, ry + 20);
+              ctx.lineTo(rx - 8 - windTilt, ry + rainSpeed);
           }
           ctx.stroke();
       }
@@ -247,7 +319,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       animationFrameId = requestAnimationFrame(render);
     };
 
-    // --- Helper: Render Ship ---
     const renderShip = (
         ctx: CanvasRenderingContext2D, 
         ship: ShipState, 
@@ -261,97 +332,97 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         ctx.save();
         ctx.translate(ship.x, ship.y);
         ctx.rotate(ship.angle);
+        const s = 1.2;
+        ctx.scale(s, s);
 
-        // -- The Boat --
         // Hull
-        ctx.fillStyle = '#F4F6F7'; // White paper
+        ctx.fillStyle = '#FDFBF7'; 
         ctx.beginPath();
-        ctx.moveTo(-50, -20);
-        ctx.bezierCurveTo(-40, 30, 40, 30, 50, -20); // U shape
+        ctx.moveTo(-45, 0); 
+        ctx.lineTo(45, 0);
+        ctx.bezierCurveTo(45, 35, -45, 35, -45, 0);
         ctx.closePath();
         ctx.fill();
+        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
+        ctx.lineWidth = 1;
+        ctx.stroke();
         if (texture) { ctx.fillStyle = texture; ctx.globalAlpha = 0.1; ctx.fill(); ctx.globalAlpha = 1; }
         
-        // Red Stripe
+        // Stripe
         ctx.fillStyle = '#E74C3C';
         ctx.beginPath();
-        ctx.rect(-45, -15, 90, 8);
+        ctx.rect(-42, 6, 84, 8);
         ctx.fill();
 
-        // Cabin / Funnel
-        ctx.fillStyle = '#2C3E50'; // Black/Dark Blue
+        // Cabin
+        ctx.fillStyle = '#FDFBF7';
+        ctx.fillRect(-20, -25, 35, 25);
+        ctx.fillStyle = '#2C3E50';
+        ctx.beginPath(); ctx.arc(-10, -12, 2.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(0, -12, 2.5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(10, -12, 2.5, 0, Math.PI*2); ctx.fill();
+
+        // Funnel
+        ctx.fillStyle = '#2C3E50'; 
+        ctx.fillRect(0, -40, 12, 15);
+        ctx.fillStyle = '#E74C3C'; 
+        ctx.fillRect(0, -40, 12, 4);
+
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
+        const smokeY = -45 - Math.sin(t*3)*3;
         ctx.beginPath();
-        ctx.rect(-10, -45, 20, 25);
+        ctx.arc(5 + Math.sin(t)*3, smokeY, 6, 0, Math.PI*2); 
+        ctx.arc(12 + Math.sin(t*1.5)*3, smokeY - 10, 8 + Math.sin(t*2)*2, 0, Math.PI*2); 
         ctx.fill();
 
-        // Smoke
-        ctx.fillStyle = 'rgba(236, 240, 241, 0.8)';
-        const smokeY = -55 - Math.sin(t*5)*5;
+        // Fisherman
+        ctx.fillStyle = '#E67E22'; 
         ctx.beginPath();
-        ctx.arc(5 + Math.sin(t)*5, smokeY, 8 + Math.sin(t*3)*2, 0, Math.PI*2);
-        ctx.arc(15 + Math.sin(t+1)*5, smokeY-15, 12 + Math.sin(t*2)*3, 0, Math.PI*2);
+        ctx.moveTo(35, 0);
+        ctx.lineTo(45, 0);
+        ctx.lineTo(40, -15);
+        ctx.fill();
+        ctx.fillStyle = '#F1C40F'; 
+        ctx.beginPath();
+        ctx.arc(40, -18, 5, 0, Math.PI*2);
         ctx.fill();
 
-        // -- The Fisherman --
-        ctx.fillStyle = '#E67E22'; // Orange Shirt
-        ctx.beginPath();
-        ctx.arc(0, -25, 10, Math.PI, 0); // Torso
-        ctx.fill();
-        
-        ctx.fillStyle = '#F1C40F'; // Yellow Hat
-        ctx.beginPath();
-        ctx.moveTo(-10, -32);
-        ctx.lineTo(10, -32);
-        ctx.lineTo(0, -42);
-        ctx.fill();
-
-        // -- Fishing Rod --
+        // Rod
         if (fishing || fishColor) {
-            ctx.strokeStyle = '#7F8C8D';
-            ctx.lineWidth = 2;
+            ctx.strokeStyle = '#5D6D7E';
+            ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.moveTo(5, -30); // Hand pos
-            ctx.lineTo(35, -50); // Rod tip
+            ctx.moveTo(40, -15); 
+            ctx.lineTo(60, -35); 
             ctx.stroke();
-
-            // Line
             ctx.strokeStyle = 'white';
-            ctx.lineWidth = 1;
+            ctx.lineWidth = 0.8;
             ctx.beginPath();
-            ctx.moveTo(35, -50);
-            
-            // Calculate bobber pos in local space (rough approx)
-            const lineSlack = fishColor ? 0 : Math.sin(t*3)*5 + 10;
-            const bobberX = 50; 
-            const bobberY = 10; // Water level relative to ship center roughly
-            
-            ctx.quadraticCurveTo(45, -20 + lineSlack, bobberX, bobberY);
+            ctx.moveTo(60, -35);
+            const lineSlack = fishColor ? 0 : Math.sin(t*2)*3 + 5;
+            const bobberX = 75; 
+            const bobberY = 15; 
+            ctx.quadraticCurveTo(65, -15 + lineSlack, bobberX, bobberY);
             ctx.stroke();
 
-            // Bobber or Fish
             if (fishColor) {
-                // Draw Fish hanging
                 ctx.fillStyle = fishColor;
                 ctx.beginPath();
-                ctx.arc(bobberX, bobberY, 8, 0, Math.PI*2);
+                ctx.ellipse(bobberX, bobberY, 4, 8, 0, 0, Math.PI*2);
                 ctx.fill();
             } else {
-                // Bobber
                 ctx.fillStyle = '#E74C3C';
                 ctx.beginPath();
-                ctx.arc(bobberX, bobberY, 3, 0, Math.PI*2);
+                ctx.arc(bobberX, bobberY, 2.5, 0, Math.PI*2);
                 ctx.fill();
             }
-        } else if (mode === 'ZEN') {
-            // Wave hand interaction in Zen mode?
-            // Just static for now
         }
-
         ctx.restore();
     };
 
     const handleResize = () => {
         if (containerRef.current && canvasRef.current) {
+            // Slight buffer to prevent rounding errors
             canvasRef.current.width = containerRef.current.clientWidth;
             canvasRef.current.height = containerRef.current.clientHeight;
         }
@@ -365,7 +436,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         cancelAnimationFrame(animationFrameId);
         window.removeEventListener('resize', handleResize);
     };
-  }, [tilt, weather, isFishing, caughtFishColor, mode]);
+  }, [tilt, atmosphere, isFishing, caughtFishColor]);
 
   return (
     <div ref={containerRef} className="absolute inset-0 w-full h-full pointer-events-none">

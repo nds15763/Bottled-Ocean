@@ -1,3 +1,4 @@
+
 export interface Point {
   x: number;
   y: number;
@@ -31,7 +32,20 @@ export enum AppMode {
 export enum WeatherType {
   SUNNY = 'SUNNY',
   RAINY = 'RAINY',
-  NIGHT = 'NIGHT'
+  STORM = 'STORM',
+  NIGHT = 'NIGHT',
+  SNOW = 'SNOW' // Added for completeness, mapped to cold style later
+}
+
+export interface AtmosphereState {
+  type: WeatherType;
+  waveAmp: number;      // 10 - 60
+  waveSpeed: number;    // 0.5 - 2.5
+  windSpeed: number;    // Display purpose
+  temperature: number;  // Added for dashboard
+  hasRainbow: boolean;
+  isDay: boolean;
+  lightning: boolean;
 }
 
 export interface Fish {
