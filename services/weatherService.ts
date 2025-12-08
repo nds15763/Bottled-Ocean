@@ -40,21 +40,20 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
 
     // --- Wave Logic ---
     // Wind maps to amplitude. 
-    // 0 kmh -> 15 amp (Calm)
-    // 20 kmh -> 25 amp (Breeze)
-    // 50+ kmh -> 45 amp (Rough)
-    let waveAmp = 15 + (windKmh * 0.8);
+    // 0 Wind -> 2px. 100 Wind -> 52px.
+    let waveAmp = 2 + (windKmh * 0.5);
     if (waveAmp > 50) waveAmp = 50; // Cap
 
     // Wind maps to speed
-    let waveSpeed = 0.8 + (windKmh * 0.02);
-    if (waveSpeed > 2.0) waveSpeed = 2.0;
+    // 0 Wind -> 0.05. 100 Wind -> 1.25.
+    let waveSpeed = 0.05 + (windKmh * 0.012);
+    if (waveSpeed > 1.3) waveSpeed = 1.3;
 
     // Storm overrides
     let lightning = false;
     if (finalType === WeatherType.STORM) {
-        waveAmp = Math.max(waveAmp, 40);
-        waveSpeed = Math.max(waveSpeed, 1.5);
+        waveAmp = Math.max(waveAmp, 45);
+        waveSpeed = Math.max(waveSpeed, 1.0);
         lightning = true;
     }
 
@@ -89,8 +88,8 @@ export const fetchLocalWeather = async (lat: number, lon: number): Promise<Atmos
     return {
       type: WeatherType.SUNNY,
       localHour,
-      waveAmp: 20,
-      waveSpeed: 1.0,
+      waveAmp: 10,
+      waveSpeed: 0.5,
       windSpeed: 10,
       temperature: 20,
       hasRainbow: false,

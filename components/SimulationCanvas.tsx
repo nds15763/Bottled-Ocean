@@ -29,13 +29,16 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   });
   const timeRef = useRef(0);
   const lightningRef = useRef(0); // Timer for lightning flash
-  const cloudsRef = useRef<{x: number, y: number, scale: number, type: number}[]>([]);
+  
+  // Store clouds with relative Y positions (0.0 to 0.4 of screen height)
+  // And accumulate X position manually to avoid speed-change jumps
+  const cloudsRef = useRef<{x: number, yPct: number, scale: number, type: number}[]>([]);
   
   // Generate clouds once
   useEffect(() => {
     cloudsRef.current = Array.from({ length: 6 }).map(() => ({
       x: Math.random() * 2000, 
-      y: Math.random() * 200 + 50, 
+      yPct: Math.random() * 0.35 + 0.05, // Top 5% to 40% of screen
       scale: 0.8 + Math.random() * 0.5,
       type: Math.floor(Math.random() * 3)
     }));
@@ -71,6 +74,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     const noisePattern = createNoisePattern(ctx);
 
     const render = () => {
+      // Global time increments constantly for wave phases, sun rotation, etc.
+      // Independent of wind speed to prevent jitter.
       timeRef.current += 0.01;
       const width = canvas.width;
       const height = canvas.height;
@@ -103,7 +108,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       // DYNAMIC: Use atmosphere.waveAmp and atmosphere.waveSpeed
       const waveAmp = atmosphere.waveAmp * 1.2; // Mid layer usually slightly higher amp
       const waveSpeed = atmosphere.waveSpeed;
-      const waveFreq = 0.002;
+      const waveFreq = 0.0015; // Lower frequency for smoother/wider waves
       
       const wavePhase = ship.x * waveFreq + t * waveSpeed + waveLayerIndex;
       const waterHeightAtShip = Math.sin(wavePhase) * waveAmp;
@@ -181,10 +186,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       }
 
       // Celestial Orbit Calculation
-      // 06:00 -> Rise (Left), 12:00 -> Peak (Top), 18:00 -> Set (Right)
-      // Sun active 05:00 to 19:00
-      // Moon active 17:00 to 07:00
-      
       const drawCelestial = (type: 'SUN' | 'MOON') => {
            let progress = 0; // 0 to 1
            let isVisible = false;
@@ -223,7 +224,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    ctx.setLineDash([10, 10]);
                    ctx.beginPath();
                    for(let i=0; i<8; i++) {
-                       const ang = (i/8)*Math.PI*2 + t * 0.1;
+                       const ang = (i/8)*Math.PI*2 + t * 0.1; // Independent rotation
                        ctx.moveTo(Math.cos(ang)*50, Math.sin(ang)*50);
                        ctx.lineTo(Math.cos(ang)*70, Math.sin(ang)*70);
                    }
@@ -232,7 +233,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    
                    ctx.fillStyle = '#E74C3C';
                    ctx.beginPath();
-                   const r = 45 + Math.sin(t*2)*2;
+                   const r = 45 + Math.sin(t*2)*2; // Breathing independently
                    ctx.arc(0, 0, r, 0, Math.PI*2);
                    ctx.fill();
                } else {
@@ -250,8 +251,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
            }
       };
 
-      if (atmosphere.type === WeatherType.SUNNY || atmosphere.type === WeatherType.RAINY) {
-          // Even in rain, sun might be vaguely there, but definitely needed for 'Sunny'
+      // Only draw sun if NOT rainy/stormy
+      if (atmosphere.type === WeatherType.SUNNY) {
           drawCelestial('SUN');
       } 
       // Always try to draw moon if it's night time logic, unless forced storm
@@ -266,10 +267,20 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ? '#95a5a6' 
           : '#ECF0F1'; 
 
-      cloudsRef.current.forEach((cloud, i) => {
-          let speed = atmosphere.windSpeed ? (atmosphere.windSpeed / 20) : 0.5;
-          let cx = (cloud.x + t * speed * 10) % (width + 400) - 200; 
-          let cy = cloud.y;
+      // Update cloud positions (Delta movement)
+      const windFactor = atmosphere.windSpeed ? (atmosphere.windSpeed / 20) : 0;
+      // Base speed is very slow (0.1) + wind influence
+      const cloudMoveSpeed = 0.1 + windFactor; 
+
+      cloudsRef.current.forEach((cloud) => {
+          // Increment position
+          cloud.x += cloudMoveSpeed;
+          // Wrap around
+          if (cloud.x > width + 200) cloud.x = -200;
+
+          let cx = cloud.x;
+          let cy = cloud.yPct * height; // Fixed height relative to screen
+
           ctx.save();
           ctx.translate(cx, cy);
           ctx.scale(cloud.scale, cloud.scale);
@@ -331,7 +342,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.moveTo(0, height);
           ctx.lineTo(0, baseY);
           
-          const freq = 0.002;
+          const freq = 0.0015; // Lower freq for smoother look
           
           // Draw slightly past width to prevent right-edge gaps
           for(let x=0; x<=width + 20; x+=10) {

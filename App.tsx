@@ -85,16 +85,20 @@ const App: React.FC = () => {
   useEffect(() => {
     if (mode === AppMode.ZEN) {
         // Calculate physics based on debug sliders
-        let waveAmp = 10 + (debugWind * 0.8);
+        
+        // Amplitude: 0 Wind -> 2px (Calm). 100 Wind -> 52px (Huge)
+        let waveAmp = 2 + (debugWind * 0.5); 
         if (waveAmp > 60) waveAmp = 60; // Cap
-        let waveSpeed = 0.5 + (debugWind * 0.025);
-        if (waveSpeed > 3.0) waveSpeed = 3.0;
+
+        // Speed: 0 Wind -> 0.05 (Almost static). 100 Wind -> 1.25 (Fast but not glitchy)
+        let waveSpeed = 0.05 + (debugWind * 0.012);
+        if (waveSpeed > 1.3) waveSpeed = 1.3;
 
         // Storm overrides
         let isStorm = debugWeather === WeatherType.STORM;
         if (isStorm) {
             waveAmp = Math.max(waveAmp, 45);
-            waveSpeed = Math.max(waveSpeed, 1.8);
+            waveSpeed = Math.max(waveSpeed, 1.0);
         }
 
         // Day/Night logic based on slider
