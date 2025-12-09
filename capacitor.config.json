@@ -1,8 +1,0 @@
-{
-  "appId": "com.bottledocean.app",
-  "appName": "Bottled Ocean",
-  "webDir": "dist",
-  "server": {
-    "androidScheme": "https"
-  }
-}

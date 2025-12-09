@@ -1,0 +1,16 @@
+{
+  "name": "Bottled Ocean",
+  "short_name": "FocusFish",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f8fafc",
+  "theme_color": "#5DADE2",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "https://cdn.jsdelivr.net/npm/lucide-static@0.344.0/icons/anchor.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}

@@ -33,21 +33,59 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   const wavePhaseRef = useRef(0);    // Accumulated wave travel distance (prevents jumps)
   const lightningRef = useRef(0);    // Timer for lightning flash
   
-  // Store clouds
+  // Store clouds & stars
   const cloudsRef = useRef<{x: number, yPct: number, scale: number, type: number}[]>([]);
+  const starsRef = useRef<{x: number, y: number, size: number, rot: number, opacity: number}[]>([]);
+  const moonCanvasRef = useRef<HTMLCanvasElement | null>(null);
   
-  // Generate clouds once
+  // Generate static assets once
   useEffect(() => {
-    // Generate 4 clouds distributed horizontally to prevent stacking
+    // 1. Generate Clouds
     const count = 4;
     const spacing = 400; // Base spacing
     cloudsRef.current = Array.from({ length: count }).map((_, i) => ({
-      // Start spaced out: e.g. 0, 400, 800, 1200 + random jitter
       x: (i * spacing) + (Math.random() * 200), 
-      yPct: Math.random() * 0.3 + 0.05, // Top 5% to 35% of screen
+      yPct: Math.random() * 0.3 + 0.05, 
       scale: 0.8 + Math.random() * 0.4,
-      type: i % 3 // Cycle through 0, 1, 2 types
+      type: i % 3 
     }));
+
+    // 2. Generate Stars
+    starsRef.current = Array.from({ length: 60 }).map(() => ({
+      x: Math.random(), // 0-1 pct
+      y: Math.random() * 0.65, // Top 65%
+      size: 2 + Math.random() * 6,
+      rot: Math.random() * Math.PI * 2,
+      opacity: 0.4 + Math.random() * 0.6
+    }));
+
+    // 3. Generate Moon Sprite (Crescent)
+    if (!moonCanvasRef.current) {
+        const mCanvas = document.createElement('canvas');
+        mCanvas.width = 200;
+        mCanvas.height = 200;
+        const mCtx = mCanvas.getContext('2d');
+        if (mCtx) {
+            const cx = 100, cy = 100, r = 80;
+            
+            // Draw Base Moon (Yellow)
+            mCtx.fillStyle = '#F4D03F'; 
+            mCtx.beginPath();
+            mCtx.arc(cx, cy, r, 0, Math.PI * 2);
+            mCtx.fill();
+            
+            // Cutout (Clear mode)
+            mCtx.globalCompositeOperation = 'destination-out';
+            mCtx.beginPath();
+            // Offset to create the crescent shape. 
+            // Shift Up-Right to leave a crescent on Bottom-Left (matching common iconography)
+            mCtx.arc(cx + 20, cy - 20, r * 0.95, 0, Math.PI * 2);
+            mCtx.fill();
+            
+            mCtx.globalCompositeOperation = 'source-over';
+            moonCanvasRef.current = mCanvas;
+        }
+    }
   }, []);
 
   // Utility to create noise pattern for texture
@@ -84,54 +122,39 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const height = canvas.height;
       
       // 1. Time & Phase Accumulation
-      // Constant time for steady animations (Sun breathing, Smoke puffs)
       timeRef.current += 0.01;
       const t = timeRef.current;
 
-      // Accumulate Wave Phase based on current speed
-      // This prevents "Jumping" when speed changes dynamically
-      // Speed factor adjusted for visual feel (0.05 is base multiplier)
       wavePhaseRef.current += atmosphere.waveSpeed * 0.05;
       const wavePhase = wavePhaseRef.current;
 
       // Lightning Logic
       if (atmosphere.lightning && Math.random() < 0.005) {
-          lightningRef.current = 10; // Flash for 10 frames
+          lightningRef.current = 10; 
       }
       if (lightningRef.current > 0) lightningRef.current--;
 
       // --- Physics Update ---
       const ship = shipRef.current;
       
-      // Horizontal Movement
-      // Calculate max speed to ensure 5 seconds to traverse screen
-      const maxPixelsPerFrame = width / 300; // 5 seconds * 60fps = 300 frames
+      let effectiveTilt = tilt;
+      if (Math.abs(effectiveTilt) < 0.05) effectiveTilt = 0;
+      const MAX_TILT = 0.6;
+      effectiveTilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, effectiveTilt));
+      const FORCE_MULTIPLIER = 2.5; 
       
-      // Expanded dead zone - ship barely moves at small tilts
-      const deadZone = 0.45; // ~25.8 degrees - much larger to handle gyroscope noise
-      let effectiveTilt = Math.abs(tilt) < deadZone ? 0 : tilt;
+      // Ship moves DOWNHILL (Positive tilt = slide Right?)
+      // Tilt angle logic: 
+      // If I tilt Right, angle is positive? (Depending on device).
+      // If I tilt Right, I expect ship to slide Right.
+      // We fixed this previously by removing the negative sign.
+      const targetVelX = effectiveTilt * FORCE_MULTIPLIER;
       
-      // If within dead zone, apply very strong friction to stop quickly
-      if (effectiveTilt === 0) {
-        ship.velocityX *= 0.75; // Very strong friction when no tilt (was 0.80)
-        // Stop completely if velocity is very small
-        if (Math.abs(ship.velocityX) < 0.5) {
-          ship.velocityX = 0;
-        }
-      } else {
-        // Non-linear response curve - cubic function for gradual acceleration
-        const tiltSign = Math.sign(effectiveTilt);
-        const tiltMagnitude = Math.abs(effectiveTilt);
-        const normalizedTilt = Math.min(tiltMagnitude / (Math.PI / 4), 1); // Normalize to 0-1 (0 to 45°)
-        const responseCurve = Math.pow(normalizedTilt, 3); // Cubic response - slow at small angles
-        
-        // Calculate target velocity based on response curve
-        const targetVelX = tiltSign * responseCurve * maxPixelsPerFrame;
-        
-        // Smoother acceleration and stronger damping
-        ship.velocityX += (targetVelX - ship.velocityX) * 0.05; // Reduced from 0.08 for smoother acceleration
-        ship.velocityX *= 0.90; // Stronger damping (was 0.92) for better friction
-      }
+      const INERTIA = 0.03;
+      ship.velocityX += (targetVelX - ship.velocityX) * INERTIA;
+      
+      const DRAG = 0.92;
+      ship.velocityX *= DRAG; 
       
       ship.x += ship.velocityX;
       
@@ -145,7 +168,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const waveAmp = atmosphere.waveAmp * 1.2; 
       const waveFreq = 0.0015; 
       
-      // Calculate ship Y based on the accumulated phase
       const shipWavePhase = ship.x * waveFreq + wavePhase + waveLayerIndex;
       const waterHeightAtShip = Math.sin(shipWavePhase) * waveAmp;
       
@@ -153,24 +175,37 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const shipDraft = 10; 
       ship.y = waterBaseY + waterHeightAtShip - shipDraft;
 
-      // Rotation (Tangent to wave)
+      // Rotation
       const waveSlope = waveAmp * waveFreq * Math.cos(shipWavePhase);
       let targetAngle = Math.atan(waveSlope);
-      targetAngle += (ship.velocityX * 0.005);
-      ship.angle += (targetAngle - ship.angle) * 0.1;
+      targetAngle += (ship.velocityX * 0.02);
+      ship.angle += (targetAngle - ship.angle) * 0.05;
 
 
       // --- Drawing ---
       ctx.clearRect(0, 0, width, height);
 
+      // --- PHASE 1: BACKGROUND (Fixed) ---
+      
       // 1. SKY
       const hour = atmosphere.localHour;
       let skyColor1, skyColor2;
 
-      if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
+      // Logic to determine if we should show night elements
+      const isNightVisual = atmosphere.type === WeatherType.NIGHT || (!atmosphere.isDay && atmosphere.type !== WeatherType.STORM && atmosphere.type !== WeatherType.SNOW);
+      // Also consider deep night hours
+      const isDeepNight = hour < 5 || hour >= 20;
+
+      if (atmosphere.type === WeatherType.SNOW) {
+          if (hour < 6 || hour >= 18) {
+              skyColor1 = '#2C3E50'; skyColor2 = '#95A5A6'; 
+          } else {
+              skyColor1 = '#ECF0F1'; skyColor2 = '#BDC3C7'; 
+          }
+      } else if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
            skyColor1 = '#7f8c8d'; skyColor2 = '#2c3e50';
       } else {
-           if (hour < 5 || hour >= 20) {
+           if (isDeepNight) {
                skyColor1 = '#1a252f'; skyColor2 = '#000000';
            } else if (hour >= 5 && hour < 7) {
                skyColor1 = '#8E44AD'; skyColor2 = '#E67E22';
@@ -189,9 +224,55 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       grad.addColorStop(0, skyColor1);
       grad.addColorStop(1, skyColor2);
       ctx.fillStyle = grad;
-      ctx.fillRect(0,0,width,height);
+      ctx.fillRect(0, 0, width, height);
 
-      // 2. CELESTIAL BODIES
+      // 2. STARS (Draw before Sun/Moon)
+      // Show stars if it is night visually or deep night
+      if (isNightVisual || isDeepNight) {
+          ctx.save();
+          ctx.fillStyle = '#F4D03F';
+          starsRef.current.forEach(star => {
+              const sx = star.x * width;
+              const sy = star.y * height;
+              const size = star.size * (0.8 + Math.sin(t * 2 + star.x * 10) * 0.2); // Twinkle
+              
+              ctx.save();
+              ctx.translate(sx, sy);
+              ctx.rotate(star.rot);
+              ctx.globalAlpha = star.opacity;
+              
+              // Draw 5-Pointed Star
+              ctx.beginPath();
+              const spikes = 5;
+              const outerRadius = size;
+              const innerRadius = size / 2.5;
+              let rot = Math.PI / 2 * 3;
+              let x = 0; 
+              let y = 0;
+              const step = Math.PI / spikes;
+
+              ctx.moveTo(0, 0 - outerRadius);
+              for (let i = 0; i < spikes; i++) {
+                x = Math.cos(rot) * outerRadius;
+                y = Math.sin(rot) * outerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+
+                x = Math.cos(rot) * innerRadius;
+                y = Math.sin(rot) * innerRadius;
+                ctx.lineTo(x, y);
+                rot += step;
+              }
+              ctx.lineTo(0, 0 - outerRadius);
+              ctx.closePath();
+              ctx.fill();
+              
+              ctx.restore();
+          });
+          ctx.restore();
+      }
+
+      // 3. CELESTIAL BODIES
       ctx.save();
       
       if (atmosphere.hasRainbow) {
@@ -223,25 +304,28 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    isVisible = true;
                }
            } else {
-               if (hour >= 17) {
-                   progress = (hour - 17) / 14;
+               // Night logic
+               if (hour >= 18) {
+                   progress = (hour - 18) / 12; // 18 -> 0
                    isVisible = true;
-               } else if (hour <= 7) {
-                   progress = (hour + 7) / 14; 
+               } else if (hour <= 6) {
+                   progress = (hour + 6) / 12; // 0.5 + 
                    isVisible = true;
                }
            }
 
            if (isVisible) {
+               // Arc path across sky
                const cx = width * progress;
-               const orbitHeight = height * 0.7; 
-               const topMargin = height * 0.1;
+               const orbitHeight = height * 0.6; 
+               const topMargin = height * 0.15;
                const cy = height - (Math.sin(progress * Math.PI) * orbitHeight) - topMargin;
                
                ctx.translate(cx, cy);
 
                if (type === 'SUN') {
-                   ctx.strokeStyle = '#E74C3C';
+                   const isSnow = atmosphere.type === WeatherType.SNOW;
+                   ctx.strokeStyle = isSnow ? '#F39C12' : '#E74C3C';
                    ctx.lineWidth = 4;
                    ctx.setLineDash([10, 10]);
                    ctx.beginPath();
@@ -253,44 +337,53 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    ctx.stroke();
                    ctx.setLineDash([]);
                    
-                   ctx.fillStyle = '#E74C3C';
+                   ctx.fillStyle = isSnow ? '#F1C40F' : '#E74C3C';
                    ctx.beginPath();
                    const r = 45 + Math.sin(t*2)*2; 
                    ctx.arc(0, 0, r, 0, Math.PI*2);
                    ctx.fill();
                } else {
-                   ctx.rotate(-0.5); 
-                   ctx.fillStyle = '#F1C40F';
-                   ctx.beginPath();
-                   ctx.arc(0, 0, 40, 0, Math.PI*2);
-                   ctx.fill();
-                   if (noisePattern) { ctx.fillStyle = noisePattern; ctx.globalAlpha=0.2; ctx.fill(); ctx.globalAlpha=1; }
+                   // Draw Crescent Moon Sprite
+                   if (moonCanvasRef.current) {
+                       ctx.rotate(-0.3); // Slight tilt
+                       const size = 100;
+                       ctx.drawImage(moonCanvasRef.current, -size/2, -size/2, size, size);
+                   } else {
+                       // Fallback
+                       ctx.fillStyle = '#F4D03F';
+                       ctx.beginPath();
+                       ctx.arc(0, 0, 40, 0, Math.PI*2);
+                       ctx.fill();
+                   }
                }
                ctx.translate(-cx, -cy);
            }
       };
 
-      if (atmosphere.type === WeatherType.SUNNY) {
+      if (atmosphere.type === WeatherType.SUNNY || atmosphere.type === WeatherType.SNOW || (atmosphere.isDay && atmosphere.type !== WeatherType.RAINY)) {
           drawCelestial('SUN');
       } 
-      if (atmosphere.type === WeatherType.NIGHT || (!atmosphere.isDay && atmosphere.type !== WeatherType.STORM)) {
+      
+      if (isNightVisual || isDeepNight) {
           drawCelestial('MOON');
       }
 
       ctx.restore();
 
-      // 3. CLOUDS
-      ctx.fillStyle = (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) 
-          ? '#95a5a6' 
-          : '#ECF0F1'; 
+      // 4. CLOUDS (Static)
+      if (atmosphere.type === WeatherType.SNOW) {
+          ctx.fillStyle = '#E8E8E8'; // White snow clouds
+      } else if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
+          ctx.fillStyle = '#95a5a6';
+      } else {
+          ctx.fillStyle = '#ECF0F1'; 
+      }
 
       const windFactor = atmosphere.windSpeed ? (atmosphere.windSpeed / 20) : 0;
       const cloudMoveSpeed = 0.1 + windFactor; 
 
       cloudsRef.current.forEach((cloud) => {
-          // Delta movement
           cloud.x += cloudMoveSpeed;
-          // Wrap around logic with ample buffer to ensure they start off-screen right
           if (cloud.x > width + 200) cloud.x = -200;
 
           let cx = cloud.x;
@@ -302,18 +395,15 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.beginPath();
           
           if (cloud.type === 0) {
-              // Classic Puff
               ctx.arc(0, 0, 30, 0, Math.PI*2);
               ctx.arc(25, -10, 35, 0, Math.PI*2);
               ctx.arc(50, 0, 30, 0, Math.PI*2);
           } else if (cloud.type === 1) {
-              // Long Flat
               ctx.arc(0, 0, 25, 0, Math.PI*2);
               ctx.arc(40, -5, 30, 0, Math.PI*2);
               ctx.arc(80, 0, 25, 0, Math.PI*2);
-              ctx.rect(0, 0, 80, 20); // Flat bottom fill
+              ctx.rect(0, 0, 80, 20); 
           } else {
-              // Big Fluffy
               ctx.arc(0, 0, 40, 0, Math.PI*2);
               ctx.arc(40, -20, 50, 0, Math.PI*2);
               ctx.arc(80, 0, 40, 0, Math.PI*2);
@@ -343,14 +433,22 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.restore();
       }
 
-      // 4. WATER LAYERS (Accumulated Phase)
+      // --- PHASE 2: FOREGROUND ---
+      ctx.save();
+
+      const renderW = width * 1.5;
+      const renderH = height * 1.5;
+      const offsetX = -width * 0.25;
+
+      // 5. WATER LAYERS
       const layers = [
           { color: '#5DADE2', yOff: 0, ampMult: 1.0, speedRatio: 0.8 }, 
           { color: '#3498DB', yOff: 20, ampMult: 1.2, speedRatio: 1.0 }, 
           { color: '#2980B9', yOff: 45, ampMult: 1.0, speedRatio: 1.2 },  
       ];
 
-      if (hour >= 18 || hour < 6 || atmosphere.type === WeatherType.NIGHT) {
+      // Water Color Logic
+      if (isDeepNight || isNightVisual) {
           layers[0].color = '#2471A3';
           layers[1].color = '#1A5276';
           layers[2].color = '#154360';
@@ -358,6 +456,10 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           layers[0].color = '#546E7A';
           layers[1].color = '#455A64';
           layers[2].color = '#37474F';
+      } else if (atmosphere.type === WeatherType.SNOW) {
+          layers[0].color = '#AED6F1';
+          layers[1].color = '#85C1E9';
+          layers[2].color = '#5DADE2';
       } else if (hour >= 17 && hour < 18) {
           layers[0].color = '#EB984E';
           layers[1].color = '#D35400';
@@ -368,23 +470,21 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           ctx.fillStyle = layer.color;
           ctx.beginPath();
           const baseY = height * 0.6 + layer.yOff;
-          ctx.moveTo(0, height);
-          ctx.lineTo(0, baseY);
+          
+          ctx.moveTo(offsetX, height * 1.5);
+          ctx.lineTo(offsetX, baseY);
           
           const freq = 0.0015; 
           const layerAmp = atmosphere.waveAmp * layer.ampMult;
-          
-          // Use accumulated phase + x-offset
-          // phase = wavePhaseRef.current * layer.speedRatio
           const currentPhase = wavePhaseRef.current * layer.speedRatio + i;
 
-          for(let x=0; x<=width + 20; x+=10) {
+          for(let x = offsetX; x <= renderW; x+=10) {
               const y = baseY + Math.sin(x * freq + currentPhase) * layerAmp;
               ctx.lineTo(x, y);
           }
           
-          ctx.lineTo(width + 20, height);
-          ctx.lineTo(0, height);
+          ctx.lineTo(renderW, renderH);
+          ctx.lineTo(offsetX, renderH);
           ctx.closePath();
           ctx.fill();
 
@@ -400,12 +500,13 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           }
 
           if (i === 1) {
-              // Pass the independent 't' for smoke/sun animations
               renderShip(ctx, ship, t, width, height, isFishing, caughtFishColor, noisePattern);
           }
       });
 
-      // 5. PRECIPITATION
+      // 6. PRECIPITATION
+      const offsetY_Rain = -height * 0.25; 
+
       if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
           ctx.strokeStyle = 'rgba(255, 255, 255, 0.6)';
           ctx.lineWidth = 1.5;
@@ -413,17 +514,33 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           const rainCount = atmosphere.type === WeatherType.STORM ? 100 : 40;
           const rainSpeed = atmosphere.type === WeatherType.STORM ? 50 : 25;
           for(let i=0; i<rainCount; i++) {
-              // Use t for rain cycle, wrapped
-              const rx = (Math.random() * width * 1.5) - (t * 400 % width);
-              const ry = Math.random() * height;
+              const rx = (Math.random() * renderW) + offsetX - (t * 400 % width);
+              const ry = (Math.random() * renderH) + offsetY_Rain;
               const windTilt = atmosphere.windSpeed * 0.5;
               ctx.moveTo(rx, ry);
               ctx.lineTo(rx - 8 - windTilt, ry + rainSpeed);
           }
           ctx.stroke();
+      } else if (atmosphere.type === WeatherType.SNOW) {
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+          ctx.beginPath();
+          const snowCount = 50;
+          for(let i=0; i<snowCount; i++) {
+              const fallSpeed = 2 + (i % 3);
+              const drift = Math.sin(t + i) * 20; 
+              
+              const sx = ((i * 37 + t * 20) % (renderW)) + offsetX + drift;
+              const sy = ((i * 91 + t * fallSpeed * 10) % (renderH)) + offsetY_Rain;
+              
+              const size = (i % 3) + 2; 
+              
+              ctx.moveTo(sx, sy);
+              ctx.arc(sx, sy, size, 0, Math.PI*2);
+          }
+          ctx.fill();
       }
 
-      // FIX: Capture the ID so it can be cancelled properly on re-render
+      ctx.restore();
       animationFrameId = requestAnimationFrame(render);
     };
 
@@ -476,7 +593,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         ctx.fillStyle = '#E74C3C'; 
         ctx.fillRect(0, -40, 12, 4);
 
-        // Smoke (Uses independent t)
+        // Smoke
         ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
         const smokeY = -45 - Math.sin(t*3)*3;
         ctx.beginPath();
@@ -491,7 +608,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         ctx.lineTo(45, 0);
         ctx.lineTo(40, -15);
         ctx.fill();
-        ctx.fillStyle = '#F1C40F'; 
+        
+        // Hat Pom-pom
+        ctx.fillStyle = atmosphere.type === WeatherType.SNOW ? '#FFF' : '#F1C40F'; 
         ctx.beginPath();
         ctx.arc(40, -18, 5, 0, Math.PI*2);
         ctx.fill();
@@ -539,7 +658,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     window.addEventListener('resize', handleResize);
     handleResize();
 
-    // Fix: Capture the ID initially as well
     animationFrameId = requestAnimationFrame(render);
     
     return () => {

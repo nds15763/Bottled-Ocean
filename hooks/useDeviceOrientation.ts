@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 
 interface OrientationState {
   tilt: number; // Tilt angle in radians relative to screen bottom
@@ -10,10 +10,6 @@ export const useDeviceOrientation = () => {
   const [orientation, setOrientation] = useState<OrientationState>({ tilt: 0, rawX: 0, rawY: 0 });
   const [permissionGranted, setPermissionGranted] = useState<boolean>(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
-  
-  // Auto-calibration: Store the initial tilt value when app starts
-  const calibrationOffsetRef = useRef<number>(0);
-  const isCalibrated = useRef<boolean>(false);
 
   // Check if device orientation is likely supported (mobile)
   useEffect(() => {
@@ -85,19 +81,15 @@ export const useDeviceOrientation = () => {
     while (finalTilt <= -Math.PI) finalTilt += 2 * Math.PI;
     while (finalTilt > Math.PI) finalTilt -= 2 * Math.PI;
 
-    // AUTO-CALIBRATION: On first motion event, capture the current angle as "zero"
-    // This eliminates any default drift when phone is flat
-    if (!isCalibrated.current) {
-      calibrationOffsetRef.current = finalTilt;
-      isCalibrated.current = true;
-      console.log('📱 Auto-calibrated tilt offset:', finalTilt);
-    }
-    
-    // Apply calibration offset to get true tilt relative to initial position
-    const calibratedTilt = finalTilt - calibrationOffsetRef.current;
+    // Invert because canvas rotation is usually opposite to "leveling" logic?
+    // If I tilt phone Right, Gravity moves Left relative to phone. 
+    // Water surface should rotate Left (Negative) to stay flat.
+    // Let's trust the vector math: finalTilt is the angle of the gravity vector relative to "Device Down".
+    // Actually it's simpler:
+    // We pass this angle to the canvas. The canvas renders the water at `-finalTilt`.
     
     setOrientation({
-      tilt: calibratedTilt,
+      tilt: finalTilt,
       rawX: x,
       rawY: y
     });

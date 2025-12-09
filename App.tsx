@@ -6,52 +6,13 @@ import { generateFishLore } from './services/geminiService';
 import { fetchLocalWeather } from './services/weatherService';
 import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
-import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning } from 'lucide-react';
-import { ScreenOrientation } from '@capacitor/screen-orientation';
-import { StatusBar, Style } from '@capacitor/status-bar';
-import { Capacitor } from '@capacitor/core';
+import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake } from 'lucide-react';
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
   
   // App State
   const [mode, setMode] = useState<AppMode>(AppMode.MENU);
-  
-  // System Initialization - Lock Landscape & Hide Status Bar & Keep Awake
-  useEffect(() => {
-    const initializeSystemSettings = async () => {
-      if (Capacitor.isNativePlatform()) {
-        try {
-          // Lock to Landscape orientation
-          await ScreenOrientation.lock({ orientation: 'landscape' });
-          console.log('Locked to landscape orientation');
-          
-          // Hide status bar for immersive experience
-          await StatusBar.setOverlaysWebView({ overlay: true });
-          await StatusBar.hide();
-          console.log('Status bar hidden and overlay enabled');
-        } catch (error) {
-          console.error('Failed to configure system settings:', error);
-        }
-      }
-
-      // Web Wake Lock
-      if ('wakeLock' in navigator) {
-        try {
-            let wakeLock: any = null;
-            const requestLock = async () => {
-                try { wakeLock = await (navigator as any).wakeLock.request('screen'); } catch (e) { console.error(e); }
-            };
-            await requestLock();
-            document.addEventListener('visibilitychange', () => {
-                if (document.visibilityState === 'visible') requestLock();
-            });
-        } catch (err) { console.error(err); }
-      }
-    };
-    
-    initializeSystemSettings();
-  }, []);
   
   // Weather / Atmosphere State
   const [atmosphere, setAtmosphere] = useState<AtmosphereState>({
@@ -77,12 +38,12 @@ const App: React.FC = () => {
   const [zenPanelOpen, setZenPanelOpen] = useState(false);
 
   // Game State
-  const [focusDuration, setFocusDuration] = useState<number>(25);
+  const [focusDuration, setFocusDuration] = useState<number>(15);
   const [timeLeft, setTimeLeft] = useState<number>(0);
   const [caughtFish, setCaughtFish] = useState<Fish | null>(null);
   const [lore, setLore] = useState<string>("");
   const [loadingLore, setLoadingLore] = useState(false);
-  const [showExitConfirm, setShowExitConfirm] = useState(false);
+  const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   
   // Collection
   const [collection, setCollection] = useState<string[]>([]);
@@ -155,7 +116,7 @@ const App: React.FC = () => {
             waveAmp,
             waveSpeed,
             windSpeed: debugWind,
-            temperature: 20, // Static for debug
+            temperature: debugWeather === WeatherType.SNOW ? -2 : 20, 
             hasRainbow,
             isDay,
             lightning: isStorm
@@ -182,30 +143,12 @@ const App: React.FC = () => {
 
   // Actions
   const startFocus = (min: number) => {
-    // Implicitly request permission if needed
-    if (!permissionGranted && requestPermission) {
-        requestPermission();
-    }
-
     setFocusDuration(min);
     setTimeLeft(min * 60);
     setMode(AppMode.FOCUSING);
+    setShowQuitConfirm(false);
     if (!isDesktop && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch(() => {});
-    }
-  };
-
-  const handleFail = () => {
-    if (mode === AppMode.FOCUSING) {
-        if (navigator.vibrate) navigator.vibrate(200);
-        const confirmed = window.confirm("Are you sure you want to exit? You will lose your focus progress!");
-        if (confirmed) {
-            setShowExitConfirm(false);
-            setMode(AppMode.MENU);
-            if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
-        } else {
-            setShowExitConfirm(false);
-        }
     }
   };
 
@@ -226,6 +169,12 @@ const App: React.FC = () => {
     setLoadingLore(false);
     
     if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+  };
+
+  const handleQuit = () => {
+      setMode(AppMode.MENU);
+      setShowQuitConfirm(false);
+      if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
   };
 
   const formatTime = (s: number) => {
@@ -251,97 +200,134 @@ const App: React.FC = () => {
       </div>
 
       {/* Main Controls Center */}
-      <div className="flex flex-col gap-4 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
+      <div className="flex flex-col gap-6 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
         
-        <div className="bg-white p-5 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
-            <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-3 landscape:mb-2 font-hand flex items-center gap-2">
-                <Clock size={20} /> Select Focus Time
-            </h3>
-            <div className="flex justify-between gap-2">
-                {[15, 30, 45].map(m => (
-                    <button key={m} onClick={() => startFocus(m)} 
-                        className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-3 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-xl landscape:text-xl">
-                        {m}m
-                    </button>
-                ))}
-            </div>
-        </div>
-
-        <div className="grid grid-cols-2 gap-4">
-            <button onClick={() => setMode(AppMode.COLLECTION)} 
-                className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
-                <BookOpen className="text-orange-500" size={32} />
-                <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
+        {(!permissionGranted && !isDesktop) ? (
+            <button onClick={requestPermission} className="bg-orange-400 text-white font-bold py-3 px-8 rounded-full shadow-lg transform active:scale-95 transition crayon-box font-hand text-xl w-full">
+            Start Adventure (Enable Sensors)
             </button>
-            <button onClick={() => setMode(AppMode.ZEN)} 
-                className="bg-white p-3 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
-                <Settings className="text-green-500" size={32} />
-                <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
-            </button>
-        </div>
-        
-            {/* Weather Sync Button (Integrated into Right Column for Landscape) */}
-        <div className="w-full">
-            {!weatherEnabled ? (
-                <button 
-                    onClick={handleEnableWeather}
-                    className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-3 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
-                >
-                    <div className="flex flex-col text-left">
-                        <span className="font-bold font-hand text-lg landscape:text-base">Sync Weather</span>
-                        <span className="text-xs text-indigo-400 font-sans hidden sm:block">Real-time effects</span>
-                    </div>
-                    <div className="bg-indigo-200 p-2 rounded-full text-indigo-700 group-hover:scale-110 transition">
-                        <CloudRain size={20} />
-                    </div>
-                </button>
-            ) : (
-                <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-3 landscape:p-3 rounded-2xl flex items-center gap-3">
-                    <div className="bg-emerald-200 p-2 rounded-full">
-                        <MapPin size={18} />
-                    </div>
-                    <div className="flex flex-col text-left overflow-hidden">
-                        <span className="font-bold font-hand text-lg landscape:text-base whitespace-nowrap">Ocean Synced</span>
-                        <span className="text-xs text-emerald-500 font-sans truncate">{locationName}</span>
+        ) : (
+            <>
+                <div className="bg-white p-6 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
+                    <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-4 landscape:mb-2 font-hand flex items-center gap-2">
+                        <Clock size={20} /> Select Focus Time
+                    </h3>
+                    <div className="flex justify-between gap-2">
+                        {[15, 30, 45].map(m => (
+                            <button key={m} onClick={() => startFocus(m)} 
+                                className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-4 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-2xl landscape:text-xl">
+                                {m}m
+                            </button>
+                        ))}
                     </div>
                 </div>
-            )}
-        </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <button onClick={() => setMode(AppMode.COLLECTION)} 
+                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
+                        <BookOpen className="text-orange-500" size={32} />
+                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
+                    </button>
+                    <button onClick={() => setMode(AppMode.ZEN)} 
+                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
+                        <Settings className="text-green-500" size={32} />
+                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
+                    </button>
+                </div>
+                
+                 {/* Weather Sync Button (Integrated into Right Column for Landscape) */}
+                <div className="w-full">
+                    {!weatherEnabled ? (
+                        <button 
+                            onClick={handleEnableWeather}
+                            className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-4 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
+                        >
+                            <div className="flex flex-col text-left">
+                                <span className="font-bold font-hand text-lg landscape:text-base">Sync Weather</span>
+                                <span className="text-xs text-indigo-400 font-sans hidden sm:block">Real-time effects</span>
+                            </div>
+                            <div className="bg-indigo-200 p-2 rounded-full text-indigo-700 group-hover:scale-110 transition">
+                                <CloudRain size={20} />
+                            </div>
+                        </button>
+                    ) : (
+                        <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-4 landscape:p-3 rounded-2xl flex items-center gap-3">
+                            <div className="bg-emerald-200 p-2 rounded-full">
+                                <MapPin size={18} />
+                            </div>
+                            <div className="flex flex-col text-left overflow-hidden">
+                                <span className="font-bold font-hand text-lg landscape:text-base whitespace-nowrap">Ocean Synced</span>
+                                <span className="text-xs text-emerald-500 font-sans truncate">{locationName}</span>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </>
+        )}
       </div>
       
-   {/* Spacer for portrait bottom area */}
+      {/* Spacer for portrait bottom area */}
       <div className="landscape:hidden h-8"></div>
     </div>
   );
 
   const renderFocusing = () => (
-    <div className="absolute inset-0 z-50 pointer-events-none p-4 w-full h-full"> 
-       
-       <div className="w-full h-full relative">
-
-           {/* Timer Group - Top-Center (Portrait) / Top-Left (Landscape) */}
-           <div className="absolute top-12 left-1/2 -translate-x-1/2 landscape:top-6 landscape:left-12 landscape:translate-x-0 flex flex-col items-center transition-all duration-500">
-               
-               {/* Timer Card */}
-               <div className="z-20 bg-white/95 backdrop-blur-md py-4 w-72 rounded-2xl shadow-xl border-4 border-slate-100 crayon-box flex justify-center items-center">
-                   <span className="text-slate-700 font-hand text-6xl font-black tracking-widest tabular-nums">
-                     {formatTime(timeLeft)}
-                   </span>
-               </div>
-
-               {/* Warning Tag - Spliced Below */}
-               <div className="-mt-4 pt-6 pb-2 px-8 bg-yellow-100/95 text-yellow-700 rounded-b-xl shadow-lg border-x-2 border-b-2 border-yellow-200 w-[90%] z-10 flex justify-center items-center">
-                    <span className="font-bold text-sm font-hand flex items-center gap-2 uppercase tracking-wide">
-                        ⚠️ Don't Touch!
-                    </span>
+    <>
+       {/* Minimal HUD Card (Spliced Style) */}
+       <div 
+         className="absolute top-8 right-8 z-40 pointer-events-auto flex flex-col animate-fade-in rounded-3xl w-56"
+         style={{ boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' }}
+       >
+           {/* Top Section: Time */}
+           <div className="bg-white/95 backdrop-blur-md pt-5 pb-3 rounded-t-3xl border-2 border-b-0 border-slate-200 flex flex-col items-center w-full">
+               <span className="text-6xl font-hand font-bold text-slate-700 tracking-wider tabular-nums leading-none mb-1">
+                 {formatTime(timeLeft)}
+               </span>
+               <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs uppercase tracking-widest font-hand">
+                    <Clock size={12} /> {currentTime}
                </div>
            </div>
-
+           
+           {/* Bottom Section: Stop Button (Spliced) */}
+           <button 
+             onClick={() => setShowQuitConfirm(true)}
+             className="w-full bg-red-50 hover:bg-red-100 text-red-500 py-3 rounded-b-3xl font-bold font-hand text-lg transition border-2 border-t border-red-100 flex items-center justify-center gap-2 active:bg-red-200 group"
+           >
+             <LogOut size={18} className="group-hover:-translate-x-1 transition-transform"/> Stop
+           </button>
        </div>
 
-       {/* Trap layer for interaction penalty */}
-       <div className="absolute inset-0 pointer-events-auto z-40" onClick={handleFail}></div>
-    </div>
+       {/* Quit Confirmation Modal */}
+       {showQuitConfirm && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in pointer-events-auto">
+          <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center border-2 border-white/50">
+            
+            <div className="bg-orange-100 p-4 rounded-full text-orange-500 mb-4 shadow-sm transform -rotate-3">
+                <Anchor size={40} />
+            </div>
+            
+            <h2 className="text-3xl font-black text-slate-800 font-hand mb-2">Reel in the line?</h2>
+
+            <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-center w-full mb-6">
+                <p className="font-hand text-lg text-slate-600 leading-snug">
+                    If you stop now, the fish will get away!
+                </p>
+            </div>
+
+            <div className="flex gap-3 w-full">
+                <button onClick={() => setShowQuitConfirm(false)} 
+                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl font-hand text-lg border-2 border-slate-200 transition active:scale-95">
+                    Wait
+                </button>
+                <button onClick={handleQuit} 
+                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl font-hand text-lg shadow-lg border-b-4 border-red-700 active:border-b-0 active:translate-y-1 transition-all">
+                    Give Up
+                </button>
+            </div>
+          </div>
+        </div>
+       )}
+    </>
   );
 
   const renderReward = () => (
@@ -455,26 +441,31 @@ const App: React.FC = () => {
                       </div>
 
                       {/* Weather Type */}
-                      <div className="grid grid-cols-4 gap-2">
+                      <div className="grid grid-cols-5 gap-2">
                           <button 
                             onClick={() => setDebugWeather(WeatherType.SUNNY)}
-                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Sun size={20}/> Sunny
+                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <Sun size={18}/> Sun
                           </button>
                           <button 
                             onClick={() => setDebugWeather(WeatherType.RAINY)}
-                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <CloudDrizzle size={20}/> Rainy
+                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <CloudDrizzle size={18}/> Rain
                           </button>
                           <button 
                             onClick={() => setDebugWeather(WeatherType.STORM)}
-                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <CloudLightning size={20}/> Storm
+                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <CloudLightning size={18}/> Storm
                           </button>
                           <button 
                             onClick={() => setDebugWeather(WeatherType.NIGHT)}
-                            className={`p-3 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-xs ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Moon size={20}/> Night
+                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <Moon size={18}/> Night
+                          </button>
+                          <button 
+                            onClick={() => setDebugWeather(WeatherType.SNOW)}
+                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.SNOW ? 'bg-cyan-100 border-cyan-400 text-cyan-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
+                              <Snowflake size={18}/> Snow
                           </button>
                       </div>
 
