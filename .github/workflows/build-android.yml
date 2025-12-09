@@ -22,7 +22,7 @@ jobs:
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
-          java-version: '21'
+          java-version: '17'
 
       - name: Install Dependencies
         run: npm install
@@ -30,7 +30,7 @@ jobs:
       - name: Build Web App
         run: npm run build
         env:
-          API_KEY: ${{ secrets.API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.API_KEY }}
 
       - name: Setup Capacitor Android
         run: |
