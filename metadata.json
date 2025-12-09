@@ -2,6 +2,7 @@
   "name": "Bottled Ocean",
   "description": "A physics-based simulation of a ship in a fluid bottle, controlled by device orientation.",
   "requestFramePermissions": [
-    "geolocation"
+    "geolocation",
+    "screen-wake-lock"
   ]
 }

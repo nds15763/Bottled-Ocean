@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import SimulationCanvas from './components/SimulationCanvas';
 import { generateFishLore } from './services/geminiService';
@@ -68,37 +68,63 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Wake Lock Request Logic
+  const requestWakeLock = useCallback(async () => {
+    if ('wakeLock' in navigator) {
+      try {
+        wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+        console.log('Wake Lock active');
+        
+        // Listener to release
+        wakeLockRef.current.addEventListener('release', () => {
+            console.log('Wake Lock released');
+        });
+
+      } catch (err: any) {
+        // Gracefully handle policy errors (e.g. running in iframe without allow="screen-wake-lock")
+        // Downgrade to debug log if it's a policy/security restriction
+        if (err.name === 'NotAllowedError' || err.name === 'SecurityError' || err.message?.includes('policy') || err.message?.includes('disallowed')) {
+            console.debug('Wake Lock unavailable (policy restriction). Screen may dim.');
+        } else {
+            console.error('Wake Lock failed:', err);
+        }
+      }
+    }
+  }, []);
+
   // Wake Lock & Orientation Lock Effect
   useEffect(() => {
     const manageScreen = async () => {
         if (mode === AppMode.FOCUSING) {
             // 1. Request Wake Lock
-            try {
-                if ('wakeLock' in navigator) {
-                    wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-                    console.log('Wake Lock active');
-                }
-            } catch (err) {
-                console.error('Wake Lock failed:', err);
-            }
+            await requestWakeLock();
 
             // 2. Lock Orientation to Landscape
             try {
                 if (screen.orientation && (screen.orientation as any).lock) {
-                     await (screen.orientation as any).lock('landscape');
-                     console.log('Orientation locked to landscape');
+                     await (screen.orientation as any).lock('landscape').catch((e: any) => {
+                         // Ignore errors, common on desktop or if not fullscreen
+                         console.debug("Orientation lock skipped:", e);
+                     });
                 }
             } catch (err) {
-                // Expected to fail on some browsers if not fullscreen
-                console.log('Orientation lock failed (may need fullscreen first):', err);
+                console.debug('Orientation lock API unavailable');
             }
+
+            // 3. Re-acquire Wake Lock on visibility change (Tab switching etc)
+            const handleVisibility = () => {
+                if (document.visibilityState === 'visible' && wakeLockRef.current === null) {
+                    requestWakeLock();
+                }
+            };
+            document.addEventListener('visibilitychange', handleVisibility);
+            return () => document.removeEventListener('visibilitychange', handleVisibility);
 
         } else {
             // Release Wake Lock
             if (wakeLockRef.current) {
                 await wakeLockRef.current.release();
                 wakeLockRef.current = null;
-                console.log('Wake Lock released');
             }
             // Unlock Orientation
             if (screen.orientation && (screen.orientation as any).unlock) {
@@ -107,12 +133,14 @@ const App: React.FC = () => {
         }
     };
 
-    manageScreen();
+    const cleanupPromise = manageScreen();
 
+    // Cleanup function
     return () => {
+        // We can't really await here, but we trigger release
         if (wakeLockRef.current) wakeLockRef.current.release();
     };
-  }, [mode]);
+  }, [mode, requestWakeLock]);
 
   // Weather Logic
   const handleEnableWeather = () => {

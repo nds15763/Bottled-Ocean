@@ -1,54 +1,55 @@
-name: Build and Deploy App
-
-on:
-  push:
-    branches: ["main"]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
-concurrency:
-  group: "pages"
-  cancel-in-progress: false
-
-jobs:
-  build:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          
-      # Assuming a standard package.json exists. If you are using a specific lockfile,
-      # you might want to use 'npm ci' instead.
-      - name: Install Dependencies
-        run: npm install
-
-      - name: Build
-        run: npm run build
-        env:
-          # Make sure to add this secret in your GitHub Repo Settings
-          API_KEY: ${{ secrets.API_KEY }}
-
-      - name: Upload Build Artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: ./dist # Default Vite output folder. Change to ./build if using CRA.
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+# Workflow disabled as per user request to focus on Android APK build.
+# name: Build and Deploy App
+#
+# on:
+#   push:
+#     branches: ["main"]
+#   workflow_dispatch:
+#
+# permissions:
+#   contents: read
+#   pages: write
+#   id-token: write
+#
+# concurrency:
+#   group: "pages"
+#   cancel-in-progress: false
+#
+# jobs:
+#   build:
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: Checkout
+#         uses: actions/checkout@v4
+#
+#       - name: Setup Node
+#         uses: actions/setup-node@v4
+#         with:
+#           node-version: "20"
+#           
+#       # Assuming a standard package.json exists. If you are using a specific lockfile,
+#       # you might want to use 'npm ci' instead.
+#       - name: Install Dependencies
+#         run: npm install
+#
+#       - name: Build
+#         run: npm run build
+#         env:
+#           # Make sure to add this secret in your GitHub Repo Settings
+#           API_KEY: ${{ secrets.API_KEY }}
+#
+#       - name: Upload Build Artifact
+#         uses: actions/upload-pages-artifact@v3
+#         with:
+#           path: ./dist # Default Vite output folder. Change to ./build if using CRA.
+#
+#   deploy:
+#     environment:
+#       name: github-pages
+#       url: ${{ steps.deployment.outputs.page_url }}
+#     runs-on: ubuntu-latest
+#     needs: build
+#     steps:
+#       - name: Deploy to GitHub Pages
+#         id: deployment
+#         uses: actions/deploy-pages@v4
