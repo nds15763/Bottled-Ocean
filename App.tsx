@@ -6,13 +6,16 @@ import { generateFishLore } from './services/geminiService';
 import { fetchLocalWeather } from './services/weatherService';
 import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
-import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake } from 'lucide-react';
+import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake, Flower } from 'lucide-react';
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
   
   // App State
   const [mode, setMode] = useState<AppMode>(AppMode.MENU);
+  
+  // Wake Lock Ref
+  const wakeLockRef = useRef<any>(null);
   
   // Weather / Atmosphere State
   const [atmosphere, setAtmosphere] = useState<AtmosphereState>({
@@ -64,6 +67,52 @@ const App: React.FC = () => {
     const interval = setInterval(updateTime, 60000); // Every minute
     return () => clearInterval(interval);
   }, []);
+
+  // Wake Lock & Orientation Lock Effect
+  useEffect(() => {
+    const manageScreen = async () => {
+        if (mode === AppMode.FOCUSING) {
+            // 1. Request Wake Lock
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
+                    console.log('Wake Lock active');
+                }
+            } catch (err) {
+                console.error('Wake Lock failed:', err);
+            }
+
+            // 2. Lock Orientation to Landscape
+            try {
+                if (screen.orientation && (screen.orientation as any).lock) {
+                     await (screen.orientation as any).lock('landscape');
+                     console.log('Orientation locked to landscape');
+                }
+            } catch (err) {
+                // Expected to fail on some browsers if not fullscreen
+                console.log('Orientation lock failed (may need fullscreen first):', err);
+            }
+
+        } else {
+            // Release Wake Lock
+            if (wakeLockRef.current) {
+                await wakeLockRef.current.release();
+                wakeLockRef.current = null;
+                console.log('Wake Lock released');
+            }
+            // Unlock Orientation
+            if (screen.orientation && (screen.orientation as any).unlock) {
+                (screen.orientation as any).unlock();
+            }
+        }
+    };
+
+    manageScreen();
+
+    return () => {
+        if (wakeLockRef.current) wakeLockRef.current.release();
+    };
+  }, [mode]);
 
   // Weather Logic
   const handleEnableWeather = () => {
@@ -147,8 +196,12 @@ const App: React.FC = () => {
     setTimeLeft(min * 60);
     setMode(AppMode.FOCUSING);
     setShowQuitConfirm(false);
+    
+    // Request Fullscreen
     if (!isDesktop && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch(() => {});
+        document.documentElement.requestFullscreen().catch((err) => {
+            console.log("Fullscreen request failed", err);
+        });
     }
   };
 
@@ -213,7 +266,7 @@ const App: React.FC = () => {
                         <Clock size={20} /> Select Focus Time
                     </h3>
                     <div className="flex justify-between gap-2">
-                        {[15, 30, 45].map(m => (
+                        {[1, 15, 30, 45].map(m => (
                             <button key={m} onClick={() => startFocus(m)} 
                                 className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-4 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-2xl landscape:text-xl">
                                 {m}m
@@ -230,7 +283,7 @@ const App: React.FC = () => {
                     </button>
                     <button onClick={() => setMode(AppMode.ZEN)} 
                         className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
-                        <Settings className="text-green-500" size={32} />
+                        <Flower className="text-emerald-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
                     </button>
                 </div>
@@ -332,26 +385,26 @@ const App: React.FC = () => {
 
   const renderReward = () => (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 landscape:p-8 max-w-md w-full shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center">
+      <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 w-80 shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center">
         
-        <div className="text-8xl filter drop-shadow-xl mb-6 transform hover:scale-110 transition cursor-pointer">
+        <div className="text-6xl filter drop-shadow-xl mb-4 transform hover:scale-110 transition cursor-pointer">
             {caughtFish?.icon}
         </div>
         
-        <h2 className="text-4xl font-black text-slate-800 font-hand mb-2">{caughtFish?.name}</h2>
-        <div className="inline-block px-4 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200 mb-6">
+        <h2 className="text-3xl font-black text-slate-800 font-hand mb-2">{caughtFish?.name}</h2>
+        <div className="inline-block px-4 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200 mb-4">
             {caughtFish?.rarity}
         </div>
 
-        <div className="bg-slate-50 p-5 rounded-2xl border-2 border-slate-100 text-left relative w-full">
+        <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-left relative w-full">
             <div className="absolute -top-3 -left-2 bg-yellow-200 w-8 h-8 rounded-full opacity-50"></div>
-            <p className="font-hand text-lg text-slate-600 relative z-10 leading-relaxed italic">
+            <p className="font-hand text-base text-slate-600 relative z-10 leading-relaxed italic">
                 {loadingLore ? "The fisherman is writing in his journal..." : `"${lore}"`}
             </p>
         </div>
 
         <button onClick={() => setMode(AppMode.MENU)} 
-            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-4 rounded-2xl font-hand text-xl shadow-lg border-b-4 border-sky-700 active:border-b-0 active:translate-y-1 transition-all mt-8">
+            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-2xl font-hand text-lg shadow-lg border-b-4 border-sky-700 active:border-b-0 active:translate-y-1 transition-all mt-6">
             Awesome!
         </button>
 

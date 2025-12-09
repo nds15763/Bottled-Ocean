@@ -1,0 +1,17 @@
+{
+  "appId": "com.bottledocean.app",
+  "appName": "Bottled Ocean",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    },
+    "StatusBar": {
+      "style": "DARK",
+      "overlaysWebView": true
+    }
+  }
+}

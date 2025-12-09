@@ -28,10 +28,21 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     velocityY: 0 
   });
   
+  // Fishing Animation State
+  const fishingAnimRef = useRef({
+      phase: 'IDLE' as 'IDLE' | 'CASTING' | 'FISHING' | 'REELING',
+      phaseStartTime: 0,
+      lastCycleTime: 0,
+      targetDist: 100,   
+      startDist: 0,      
+      bobberX: 45,        // Init at Rod Tip X
+      bobberY: -30        // Init at Rod Tip Y
+  });
+
   // Timers and Accumulators
-  const timeRef = useRef(0);         // Global steady clock for sun/smoke (independent of wind)
-  const wavePhaseRef = useRef(0);    // Accumulated wave travel distance (prevents jumps)
-  const lightningRef = useRef(0);    // Timer for lightning flash
+  const timeRef = useRef(0);         
+  const wavePhaseRef = useRef(0);    
+  const lightningRef = useRef(0);    
   
   // Store clouds & stars
   const cloudsRef = useRef<{x: number, yPct: number, scale: number, type: number}[]>([]);
@@ -77,8 +88,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
             // Cutout (Clear mode)
             mCtx.globalCompositeOperation = 'destination-out';
             mCtx.beginPath();
-            // Offset to create the crescent shape. 
-            // Shift Up-Right to leave a crescent on Bottom-Left (matching common iconography)
             mCtx.arc(cx + 20, cy - 20, r * 0.95, 0, Math.PI * 2);
             mCtx.fill();
             
@@ -106,6 +115,42 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         c.fill();
     }
     return ctx.createPattern(canvas, 'repeat');
+  };
+
+  // Interaction Handler: Click to Reel
+  const handlePointerDown = (e: React.PointerEvent) => {
+      // Only allow interaction if fishing and waiting for fish
+      if (!isFishing || fishingAnimRef.current.phase !== 'FISHING') return;
+
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+
+      const rect = canvas.getBoundingClientRect();
+      const clickX = e.clientX - rect.left;
+      const clickY = e.clientY - rect.top;
+
+      const ship = shipRef.current;
+      const anim = fishingAnimRef.current;
+
+      // Coordinate Transformation:
+      // Translate click to be relative to ship center
+      const dx = clickX - ship.x;
+      const dy = clickY - ship.y;
+
+      // Rotate click BACKWARDS by ship angle to align with local coordinates
+      const cos = Math.cos(-ship.angle);
+      const sin = Math.sin(-ship.angle);
+      const localX = dx * cos - dy * sin;
+      const localY = dx * sin + dy * cos;
+
+      // Calculate distance to bobber
+      const dist = Math.sqrt(Math.pow(localX - anim.bobberX, 2) + Math.pow(localY - anim.bobberY, 2));
+
+      // Hit Test (Radius 60px for generous touch target)
+      if (dist < 60) {
+          anim.phase = 'REELING';
+          anim.phaseStartTime = timeRef.current;
+      }
   };
 
   useEffect(() => {
@@ -143,11 +188,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       effectiveTilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, effectiveTilt));
       const FORCE_MULTIPLIER = 2.5; 
       
-      // Ship moves DOWNHILL (Positive tilt = slide Right?)
-      // Tilt angle logic: 
-      // If I tilt Right, angle is positive? (Depending on device).
-      // If I tilt Right, I expect ship to slide Right.
-      // We fixed this previously by removing the negative sign.
+      // Ship moves DOWNHILL (Positive tilt = slide Right)
       const targetVelX = effectiveTilt * FORCE_MULTIPLIER;
       
       const INERTIA = 0.03;
@@ -172,7 +213,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const waterHeightAtShip = Math.sin(shipWavePhase) * waveAmp;
       
       const waterBaseY = height * 0.6 + waveBaseYOffset;
-      const shipDraft = 10; 
+      const shipDraft = 12; // Adjusted for new ship hull
       ship.y = waterBaseY + waterHeightAtShip - shipDraft;
 
       // Rotation
@@ -180,6 +221,96 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       let targetAngle = Math.atan(waveSlope);
       targetAngle += (ship.velocityX * 0.02);
       ship.angle += (targetAngle - ship.angle) * 0.05;
+
+
+      // --- Fishing Animation Logic ---
+      const anim = fishingAnimRef.current;
+      
+      // Reset if not fishing
+      if (!isFishing && !caughtFishColor) {
+          anim.phase = 'IDLE';
+          // Park bobber at rod tip
+          anim.bobberX = 45;
+          anim.bobberY = -30;
+      } else if (isFishing) {
+          // Initialize Cycle
+          if (anim.phase === 'IDLE') {
+              anim.phase = 'CASTING';
+              anim.phaseStartTime = t;
+              anim.lastCycleTime = t;
+              anim.targetDist = 60 + Math.random() * 250; 
+          }
+
+          // Check 30s Cycle (Approx check using t, where 1 sec ~ 0.6t. 30s ~ 18t)
+          if (anim.phase === 'FISHING' && (t - anim.lastCycleTime > 18.0)) {
+              anim.phase = 'REELING';
+              anim.phaseStartTime = t;
+          }
+
+          // State Machine
+          if (anim.phase === 'CASTING') {
+              const duration = 1.0; // t units
+              const progress = Math.min(1, (t - anim.phaseStartTime) / duration);
+              
+              const startX = 45; 
+              const startY = -30;
+              const endX = 45 + anim.targetDist;
+              const endY = 15; // Water level relative to ship center
+              
+              const x = startX + (endX - startX) * progress;
+              
+              // Arc Height
+              const arcHeight = 100;
+              const yBase = startY + (endY - startY) * progress;
+              const arc = Math.sin(progress * Math.PI) * arcHeight;
+              const y = yBase - arc;
+
+              anim.bobberX = x;
+              anim.bobberY = y;
+
+              if (progress >= 1) {
+                  anim.phase = 'FISHING';
+              }
+          } 
+          else if (anim.phase === 'FISHING') {
+              // Floating on water
+              anim.bobberX = 45 + anim.targetDist;
+              // Add slight bobbing
+              anim.bobberY = 15 + Math.sin(t * 3) * 3;
+          }
+          else if (anim.phase === 'REELING') {
+              const duration = 1.5; // Slower reel
+              const progress = Math.min(1, (t - anim.phaseStartTime) / duration);
+              
+              const startX = 45 + anim.targetDist;
+              const waterLevel = 15;
+              const rodTipX = 45; 
+              const rodTipY = -30;
+
+              // 1. Horizontal Drag (Linear)
+              anim.bobberX = startX + (rodTipX - startX) * progress;
+              
+              // 2. Vertical Lift (Power Curve)
+              // Power of 8 keeps it near 'waterLevel' for most of the duration, 
+              // then sharply lifts to 'rodTipY' at the end.
+              const liftProgress = Math.pow(progress, 8);
+              anim.bobberY = waterLevel + (rodTipY - waterLevel) * liftProgress;
+
+              // 3. Water Turbulence
+              // Add small splashing vibration while close to water surface
+              if (anim.bobberY > 5) {
+                 anim.bobberY += Math.sin(t * 30) * 1.5; 
+              }
+
+              if (progress >= 1) {
+                  // Loop back to casting
+                  anim.phase = 'CASTING';
+                  anim.phaseStartTime = t;
+                  anim.lastCycleTime = t;
+                  anim.targetDist = 60 + Math.random() * 250;
+              }
+          }
+      }
 
 
       // --- Drawing ---
@@ -191,9 +322,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const hour = atmosphere.localHour;
       let skyColor1, skyColor2;
 
-      // Logic to determine if we should show night elements
       const isNightVisual = atmosphere.type === WeatherType.NIGHT || (!atmosphere.isDay && atmosphere.type !== WeatherType.STORM && atmosphere.type !== WeatherType.SNOW);
-      // Also consider deep night hours
       const isDeepNight = hour < 5 || hour >= 20;
 
       if (atmosphere.type === WeatherType.SNOW) {
@@ -226,8 +355,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       ctx.fillStyle = grad;
       ctx.fillRect(0, 0, width, height);
 
-      // 2. STARS (Draw before Sun/Moon)
-      // Show stars if it is night visually or deep night
+      // 2. STARS
       if (isNightVisual || isDeepNight) {
           ctx.save();
           ctx.fillStyle = '#F4D03F';
@@ -241,7 +369,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
               ctx.rotate(star.rot);
               ctx.globalAlpha = star.opacity;
               
-              // Draw 5-Pointed Star
               ctx.beginPath();
               const spikes = 5;
               const outerRadius = size;
@@ -304,18 +431,16 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    isVisible = true;
                }
            } else {
-               // Night logic
                if (hour >= 18) {
-                   progress = (hour - 18) / 12; // 18 -> 0
+                   progress = (hour - 18) / 12; 
                    isVisible = true;
                } else if (hour <= 6) {
-                   progress = (hour + 6) / 12; // 0.5 + 
+                   progress = (hour + 6) / 12; 
                    isVisible = true;
                }
            }
 
            if (isVisible) {
-               // Arc path across sky
                const cx = width * progress;
                const orbitHeight = height * 0.6; 
                const topMargin = height * 0.15;
@@ -343,13 +468,11 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                    ctx.arc(0, 0, r, 0, Math.PI*2);
                    ctx.fill();
                } else {
-                   // Draw Crescent Moon Sprite
                    if (moonCanvasRef.current) {
-                       ctx.rotate(-0.3); // Slight tilt
+                       ctx.rotate(-0.3); 
                        const size = 100;
                        ctx.drawImage(moonCanvasRef.current, -size/2, -size/2, size, size);
                    } else {
-                       // Fallback
                        ctx.fillStyle = '#F4D03F';
                        ctx.beginPath();
                        ctx.arc(0, 0, 40, 0, Math.PI*2);
@@ -372,7 +495,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
       // 4. CLOUDS (Static)
       if (atmosphere.type === WeatherType.SNOW) {
-          ctx.fillStyle = '#E8E8E8'; // White snow clouds
+          ctx.fillStyle = '#E8E8E8'; 
       } else if (atmosphere.type === WeatherType.RAINY || atmosphere.type === WeatherType.STORM) {
           ctx.fillStyle = '#95a5a6';
       } else {
@@ -383,8 +506,8 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const cloudMoveSpeed = 0.1 + windFactor; 
 
       cloudsRef.current.forEach((cloud) => {
-          cloud.x += cloudMoveSpeed;
-          if (cloud.x > width + 200) cloud.x = -200;
+          cloud.x -= cloudMoveSpeed; // Move Left
+          if (cloud.x < -200) cloud.x = width + 200;
 
           let cx = cloud.x;
           let cy = cloud.yPct * height; 
@@ -447,7 +570,6 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           { color: '#2980B9', yOff: 45, ampMult: 1.0, speedRatio: 1.2 },  
       ];
 
-      // Water Color Logic
       if (isDeepNight || isNightVisual) {
           layers[0].color = '#2471A3';
           layers[1].color = '#1A5276';
@@ -500,7 +622,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           }
 
           if (i === 1) {
-              renderShip(ctx, ship, t, width, height, isFishing, caughtFishColor, noisePattern);
+              renderShip(ctx, ship, t, width, height, isFishing, caughtFishColor, noisePattern, atmosphere.windSpeed, fishingAnimRef.current);
           }
       });
 
@@ -527,7 +649,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
           const snowCount = 50;
           for(let i=0; i<snowCount; i++) {
               const fallSpeed = 2 + (i % 3);
-              const drift = Math.sin(t + i) * 20; 
+              const drift = Math.sin(t + i) * 20 - t * 10; // Left drift
               
               const sx = ((i * 37 + t * 20) % (renderW)) + offsetX + drift;
               const sy = ((i * 91 + t * fallSpeed * 10) % (renderH)) + offsetY_Rain;
@@ -547,102 +669,227 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
     const renderShip = (
         ctx: CanvasRenderingContext2D, 
         ship: ShipState, 
-        t: number,
+        t: number, 
         w: number, 
-        h: number,
+        h: number, 
         fishing: boolean,
         fishColor: string | null | undefined,
-        texture: CanvasPattern | null
+        texture: CanvasPattern | null,
+        windSpeed: number,
+        animState: { phase: string, bobberX: number, bobberY: number }
     ) => {
         ctx.save();
         ctx.translate(ship.x, ship.y);
         ctx.rotate(ship.angle);
-        const s = 1.2;
+        const s = 1.0; 
         ctx.scale(s, s);
 
-        // Hull
-        ctx.fillStyle = '#FDFBF7'; 
-        ctx.beginPath();
-        ctx.moveTo(-45, 0); 
-        ctx.lineTo(45, 0);
-        ctx.bezierCurveTo(45, 35, -45, 35, -45, 0);
-        ctx.closePath();
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(0,0,0,0.1)';
-        ctx.lineWidth = 1;
-        ctx.stroke();
-        if (texture) { ctx.fillStyle = texture; ctx.globalAlpha = 0.1; ctx.fill(); ctx.globalAlpha = 1; }
+        // --- SMOKE LOGIC ---
+        // Funnel Top Center relative to ship center
+        const funnelX = -2;
+        const funnelY = -48;
         
-        // Stripe
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+        
+        // Use Puffs for wind <= 20, Stream for wind > 20
+        if (windSpeed <= 20) {
+            // MODE 1: Puffs (Low/Medium Wind)
+            const puffCount = 4;
+            for(let i=0; i < puffCount; i++) {
+                const cycleDuration = 3.0; 
+                const puffTime = (t * 1.5 + i * (cycleDuration / puffCount)) % cycleDuration;
+                
+                // Drift Left (Negative X)
+                const driftX = -(windSpeed * 3) * puffTime; 
+                const driftY = -puffTime * 20; 
+                
+                const alpha = Math.max(0, 1 - (puffTime / cycleDuration));
+                const size = 5 + puffTime * 5; 
+                
+                ctx.globalAlpha = alpha;
+                ctx.beginPath();
+                ctx.arc(funnelX + driftX, funnelY + driftY, size, 0, Math.PI*2);
+                ctx.fill();
+            }
+        } else {
+            // MODE 2: Stream (High Wind) - Drifting Left
+            const streamLen = 20 + windSpeed * 2.5; 
+            const segments = 20;
+            const segW = streamLen / segments;
+            
+            ctx.globalAlpha = 0.9;
+            ctx.beginPath();
+
+            const topPoints = [];
+            const bottomPoints = [];
+
+            for(let i=0; i<=segments; i++) {
+                const progress = i / segments; // 0 to 1
+                // Drift Left: Subtracting X
+                const px = funnelX - i * segW;
+                
+                const waveAmp = 4 * progress;
+                const wave = Math.sin(t * 12 - i * 0.4) * waveAmp; 
+                
+                const thickness = 6 + (i * 0.6); 
+
+                topPoints.push({ x: px, y: funnelY - thickness + wave });
+                bottomPoints.push({ x: px, y: funnelY + thickness + wave });
+            }
+
+            // Draw Top Line
+            ctx.moveTo(topPoints[0].x, topPoints[0].y);
+            for(let i=1; i<topPoints.length; i++) {
+                ctx.lineTo(topPoints[i].x, topPoints[i].y);
+            }
+
+            // Draw Round Cap at the end (Left Side)
+            const lastTop = topPoints[topPoints.length - 1];
+            const lastBottom = bottomPoints[bottomPoints.length - 1];
+            const endCenterX = (lastTop.x + lastBottom.x) / 2;
+            const endCenterY = (lastTop.y + lastBottom.y) / 2;
+            const radius = Math.abs(lastTop.y - lastBottom.y) / 2;
+            
+            // Draw counter-clockwise from bottom to top to make a Left-facing cap
+            ctx.arc(endCenterX, endCenterY, radius, Math.PI/2, -Math.PI/2, false);
+
+            // Draw Bottom Line (Reverse)
+            for(let i=bottomPoints.length - 1; i>=0; i--) {
+                ctx.lineTo(bottomPoints[i].x, bottomPoints[i].y);
+            }
+            
+            ctx.closePath();
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1.0;
+
+        // --- SHIP BODY ---
+        
+        // 1. HULL (White, Flat bottom with rounded corners)
+        ctx.fillStyle = '#FDFBF7';
+        ctx.beginPath();
+        ctx.moveTo(-55, 0);
+        ctx.lineTo(55, 0);
+        ctx.quadraticCurveTo(55, 30, 30, 30);
+        ctx.lineTo(-30, 30);
+        ctx.quadraticCurveTo(-55, 30, -55, 0);
+        ctx.fill();
+        
+        // Texture overlay
+        if (texture) { ctx.fillStyle = texture; ctx.globalAlpha = 0.1; ctx.fill(); ctx.globalAlpha = 1; }
+
+        // 2. RED STRIPE (Bottom)
         ctx.fillStyle = '#E74C3C';
         ctx.beginPath();
-        ctx.rect(-42, 6, 84, 8);
-        ctx.fill();
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(-55, 0);
+        ctx.lineTo(55, 0);
+        ctx.quadraticCurveTo(55, 30, 30, 30);
+        ctx.lineTo(-30, 30);
+        ctx.quadraticCurveTo(-55, 30, -55, 0);
+        ctx.clip();
+        ctx.fillRect(-60, 22, 120, 10);
+        ctx.restore();
 
-        // Cabin
+        // 3. CABIN (White block in middle)
         ctx.fillStyle = '#FDFBF7';
-        ctx.fillRect(-20, -25, 35, 25);
-        ctx.fillStyle = '#2C3E50';
-        ctx.beginPath(); ctx.arc(-10, -12, 2.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(0, -12, 2.5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(10, -12, 2.5, 0, Math.PI*2); ctx.fill();
-
-        // Funnel
-        ctx.fillStyle = '#2C3E50'; 
-        ctx.fillRect(0, -40, 12, 15);
-        ctx.fillStyle = '#E74C3C'; 
-        ctx.fillRect(0, -40, 12, 4);
-
-        // Smoke
-        ctx.fillStyle = 'rgba(255, 255, 255, 0.9)';
-        const smokeY = -45 - Math.sin(t*3)*3;
-        ctx.beginPath();
-        ctx.arc(5 + Math.sin(t)*3, smokeY, 6, 0, Math.PI*2); 
-        ctx.arc(12 + Math.sin(t*1.5)*3, smokeY - 10, 8 + Math.sin(t*2)*2, 0, Math.PI*2); 
-        ctx.fill();
-
-        // Fisherman
-        ctx.fillStyle = '#E67E22'; 
-        ctx.beginPath();
-        ctx.moveTo(35, 0);
-        ctx.lineTo(45, 0);
-        ctx.lineTo(40, -15);
-        ctx.fill();
+        ctx.fillRect(-35, -25, 60, 25);
         
-        // Hat Pom-pom
-        ctx.fillStyle = atmosphere.type === WeatherType.SNOW ? '#FFF' : '#F1C40F'; 
+        // 4. WINDOWS (3 Blue Circles)
+        ctx.fillStyle = '#5DADE2'; 
+        const winY = -12;
+        ctx.beginPath(); ctx.arc(-20, winY, 5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-5, winY, 5, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(10, winY, 5, 0, Math.PI*2); ctx.fill();
+
+        // 5. FUNNEL (Black Top, Red Body)
+        ctx.fillStyle = '#E74C3C';
+        ctx.fillRect(-10, -42, 16, 17); 
+        ctx.fillStyle = '#2C3E50';
+        ctx.fillRect(-10, -48, 16, 6);
+
+        // 6. FLAG (Red, Stern) -> Pointing LEFT now
+        ctx.strokeStyle = '#2C3E50';
+        ctx.lineWidth = 2;
         ctx.beginPath();
-        ctx.arc(40, -18, 5, 0, Math.PI*2);
+        ctx.moveTo(-45, 0);
+        ctx.lineTo(-45, -25);
+        ctx.stroke();
+        ctx.fillStyle = '#C0392B';
+        ctx.beginPath();
+        ctx.moveTo(-45, -25);
+        ctx.lineTo(-65, -20);  // Point Left
+        ctx.lineTo(-45, -15);
         ctx.fill();
 
-        // Rod
+        // 7. ANCHOR (Black Icon, Bow)
+        ctx.strokeStyle = '#2C3E50';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const ax = 40, ay = 10;
+        ctx.moveTo(ax, ay - 6);
+        ctx.lineTo(ax, ay + 6);
+        ctx.moveTo(ax - 4, ay + 3);
+        ctx.quadraticCurveTo(ax, ay + 8, ax + 4, ay + 3);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.arc(ax, ay - 7, 1.5, 0, Math.PI*2);
+        ctx.stroke();
+
+        // --- ROD (Dynamic) ---
         if (fishing || fishColor) {
             ctx.strokeStyle = '#5D6D7E';
             ctx.lineWidth = 1.5;
             ctx.beginPath();
-            ctx.moveTo(40, -15); 
-            ctx.lineTo(60, -35); 
+            ctx.moveTo(25, 0); 
+            ctx.lineTo(45, -30); // Rod Tip
             ctx.stroke();
+            
             ctx.strokeStyle = 'white';
             ctx.lineWidth = 0.8;
             ctx.beginPath();
-            ctx.moveTo(60, -35);
-            const lineSlack = fishColor ? 0 : Math.sin(t*2)*3 + 5;
-            const bobberX = 75; 
-            const bobberY = 15; 
-            ctx.quadraticCurveTo(65, -15 + lineSlack, bobberX, bobberY);
-            ctx.stroke();
-
+            ctx.moveTo(45, -30);
+            
+            // Calculate Bobber Position
+            let bobberX = 45;
+            let bobberY = -30;
+            
             if (fishColor) {
-                ctx.fillStyle = fishColor;
-                ctx.beginPath();
-                ctx.ellipse(bobberX, bobberY, 4, 8, 0, 0, Math.PI*2);
-                ctx.fill();
-            } else {
-                ctx.fillStyle = '#E74C3C';
-                ctx.beginPath();
-                ctx.arc(bobberX, bobberY, 2.5, 0, Math.PI*2);
-                ctx.fill();
+                 // Reward Mode: Just hang there
+                 bobberX = 65;
+                 bobberY = 15;
+            } else if (animState.phase !== 'IDLE') {
+                 // Animation Mode
+                 bobberX = animState.bobberX;
+                 bobberY = animState.bobberY;
+            }
+
+            // Draw Line
+            // Only draw if active phase
+            if (fishColor || animState.phase !== 'IDLE') {
+                if (animState.phase === 'FISHING' && !fishColor) {
+                    const midX = (45 + bobberX) / 2;
+                    const slack = 15 + Math.sin(t) * 5;
+                    const midY = ((-30 + bobberY) / 2) + slack;
+                    ctx.quadraticCurveTo(midX, midY, bobberX, bobberY);
+                } else {
+                    ctx.lineTo(bobberX, bobberY);
+                }
+                ctx.stroke();
+
+                // Draw Bobber / Fish
+                if (fishColor) {
+                    ctx.fillStyle = fishColor;
+                    ctx.beginPath();
+                    ctx.ellipse(bobberX, bobberY, 4, 8, 0, 0, Math.PI*2);
+                    ctx.fill();
+                } else {
+                    ctx.fillStyle = '#E74C3C';
+                    ctx.beginPath();
+                    ctx.arc(bobberX, bobberY, 2.5, 0, Math.PI*2);
+                    ctx.fill();
+                }
             }
         }
         ctx.restore();
@@ -667,7 +914,11 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   }, [tilt, atmosphere, isFishing, caughtFishColor]);
 
   return (
-    <div ref={containerRef} className="absolute inset-0 w-full h-full pointer-events-none">
+    <div 
+        ref={containerRef} 
+        className={`absolute inset-0 w-full h-full ${isFishing ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}`}
+        onPointerDown={handlePointerDown}
+    >
       <canvas ref={canvasRef} className="block w-full h-full" />
     </div>
   );
