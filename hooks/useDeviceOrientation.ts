@@ -80,7 +80,6 @@ export const useDeviceOrientation = () => {
   useEffect(() => {
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
     const isAndroid = /Android/i.test(navigator.userAgent);
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
     
     if (!isMobile) {
       setIsDesktop(true);
@@ -88,11 +87,9 @@ export const useDeviceOrientation = () => {
       // Android doesn't require permission for DeviceMotion, auto-enable
       setPermissionGranted(true);
       window.addEventListener('devicemotion', handleMotion);
-    } else if (isIOS) {
-      // iOS requires permission - automatically request it
-      requestPermission();
     }
-  }, [handleMotion, requestPermission]);
+    // iOS: Permission will be requested on user interaction (startFocus or Zen Mode)
+  }, [handleMotion]);
 
   // Mouse fallback for desktop
   useEffect(() => {

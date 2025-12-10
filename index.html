@@ -24,77 +24,11 @@
     </script>
     <title>Bottled Ocean</title>
     <link rel="manifest" href="/manifest.json">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-      /* Local Font Faces */
-      @font-face {
-        font-family: 'Nunito';
-        font-style: normal;
-        font-weight: 400;
-        font-display: swap;
-        src: url(/fonts/Nunito-Regular.woff2) format('woff2');
-      }
-      @font-face {
-        font-family: 'Nunito';
-        font-style: normal;
-        font-weight: 700;
-        font-display: swap;
-        src: url(/fonts/Nunito-Bold.woff2) format('woff2');
-      }
-      @font-face {
-        font-family: 'Nunito';
-        font-style: normal;
-        font-weight: 900;
-        font-display: swap;
-        src: url(/fonts/Nunito-Black.woff2) format('woff2');
-      }
-      @font-face {
-        font-family: 'Patrick Hand';
-        font-style: normal;
-        font-weight: 400;
-        font-display: swap;
-        src: url(/fonts/PatrickHand-Regular.woff2) format('woff2');
-      }
-      
-      /* Global Styles */
-      body {
-        overscroll-behavior: none;
-        touch-action: none;
-        background-color: #f8fafc;
-        font-family: 'Nunito', sans-serif;
-      }
-      
-      /* Global Paper Texture Overlay */
-      body::before {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.4'/%3E%3C/svg%3E");
-        opacity: 0.15;
-        pointer-events: none;
-        z-index: 9999;
-        mix-blend-mode: multiply;
-      }
-
-      .font-hand {
-        font-family: 'Patrick Hand', cursive;
-      }
-
-      /* Hide scrollbar for Chrome, Safari and Opera */
-      .no-scrollbar::-webkit-scrollbar {
-          display: none;
-      }
-      /* Hide scrollbar for IE, Edge and Firefox */
-      .no-scrollbar {
-          -ms-overflow-style: none;  /* IE and Edge */
-          scrollbar-width: none;  /* Firefox */
-      }
-      
-      .crayon-box {
-        box-shadow: 4px 4px 0px rgba(0,0,0,0.1);
-        border: 2px solid rgba(0,0,0,0.1);
-      }
-    </style>
+    
+    <!-- Preload critical fonts -->
+    <link rel="preload" href="/fonts/PatrickHand-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/Nunito-Regular.woff2" as="font" type="font/woff2" crossorigin>
+    <link rel="preload" href="/fonts/Nunito-Bold.woff2" as="font" type="font/woff2" crossorigin>
   <script type="importmap">
 {
   "imports": {
@@ -108,7 +42,6 @@
   }
 }
 </script>
-<link rel="stylesheet" href="/index.css">
 </head>
   <body>
     <div id="root"></div>

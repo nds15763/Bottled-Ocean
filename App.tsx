@@ -293,7 +293,7 @@ const App: React.FC = () => {
       {/* Main Controls Center */}
       <div className="flex flex-col gap-6 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
         
-                <div className="bg-white p-6 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
+                <div className="bg-white p-6 landscape:p-5 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 transform rotate-1 shadow-xl">
                     <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-4 landscape:mb-2 font-hand flex items-center gap-2">
                         <Clock size={20} /> Select Focus Time
                     </h3>
@@ -310,12 +310,12 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                     <button onClick={() => setMode(AppMode.COLLECTION)} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
+                        className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
                         <BookOpen className="text-orange-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
                     </button>
                     <button onClick={() => setMode(AppMode.ZEN)} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
+                        className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
                         <Flower className="text-emerald-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
                     </button>
