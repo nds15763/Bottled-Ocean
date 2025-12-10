@@ -1,4 +1,3 @@
-
 import React, { useRef, useEffect } from 'react';
 import { ShipState, WeatherType, AtmosphereState } from '../types';
 
@@ -183,20 +182,47 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
       const ship = shipRef.current;
       
       let effectiveTilt = tilt;
-      if (Math.abs(effectiveTilt) < 0.05) effectiveTilt = 0;
-      const MAX_TILT = 0.6;
-      effectiveTilt = Math.max(-MAX_TILT, Math.min(MAX_TILT, effectiveTilt));
-      const FORCE_MULTIPLIER = 2.5; 
       
-      // Ship moves DOWNHILL (Positive tilt = slide Right)
-      const targetVelX = effectiveTilt * FORCE_MULTIPLIER;
+      // --- REFACTORED DEAD ZONE & MOVEMENT LOGIC ---
+      // Increased Dead Zone to 0.20 (~11.5 degrees) for better stability
+      const DEAD_ZONE = 0.20; 
+      const absTilt = Math.abs(effectiveTilt);
+      let targetVelX = 0;
+
+      if (absTilt < DEAD_ZONE) {
+          // ZONE: Inside Dead Zone
+          // Action: STRONG Active Braking
+          // 0.6 multiplier kills velocity very fast.
+          ship.velocityX *= 0.6; 
+          if (Math.abs(ship.velocityX) < 0.05) ship.velocityX = 0; // Snap to stop
+      } else {
+          // ZONE: Moving
+          // Action: Smooth Acceleration
+          // We subtract the dead zone so the force starts at 0 right at the edge of the zone.
+          // This prevents the "Jump" where the ship suddenly takes off at full speed.
+          // Formula: (Tilt - DeadZone) * Multiplier
+          const magnitude = absTilt - DEAD_ZONE; 
+          const sign = Math.sign(effectiveTilt);
+          
+          const MAX_SPEED = 2.5; // Reduced from 8.0 for slow movement
+          const FORCE_MULTIPLIER = 6.0; // Reduced from 15.0 for gentler acceleration
+
+          // Target velocity based on how far past the dead zone we are
+          const rawTarget = sign * magnitude * FORCE_MULTIPLIER;
+          
+          // Clamp max speed
+          targetVelX = Math.max(-MAX_SPEED, Math.min(MAX_SPEED, rawTarget));
+          
+          // Apply Inertia (Smoothing)
+          const ACCEL = 0.05; // How fast it ramps up to target speed
+          ship.velocityX += (targetVelX - ship.velocityX) * ACCEL;
+      }
+
+      // General Drag (Water Resistance)
+      const WATER_DRAG = 0.95;
+      ship.velocityX *= WATER_DRAG;
       
-      const INERTIA = 0.03;
-      ship.velocityX += (targetVelX - ship.velocityX) * INERTIA;
-      
-      const DRAG = 0.92;
-      ship.velocityX *= DRAG; 
-      
+      // Apply Velocity
       ship.x += ship.velocityX;
       
       const padding = 80;
@@ -291,19 +317,15 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
               anim.bobberX = startX + (rodTipX - startX) * progress;
               
               // 2. Vertical Lift (Power Curve)
-              // Power of 8 keeps it near 'waterLevel' for most of the duration, 
-              // then sharply lifts to 'rodTipY' at the end.
               const liftProgress = Math.pow(progress, 8);
               anim.bobberY = waterLevel + (rodTipY - waterLevel) * liftProgress;
 
               // 3. Water Turbulence
-              // Add small splashing vibration while close to water surface
               if (anim.bobberY > 5) {
                  anim.bobberY += Math.sin(t * 30) * 1.5; 
               }
 
               if (progress >= 1) {
-                  // Loop back to casting
                   anim.phase = 'CASTING';
                   anim.phaseStartTime = t;
                   anim.lastCycleTime = t;
@@ -672,7 +694,7 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         t: number, 
         w: number, 
         h: number, 
-        fishing: boolean,
+        fishing: boolean, 
         fishColor: string | null | undefined,
         texture: CanvasPattern | null,
         windSpeed: number,
@@ -686,8 +708,9 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
 
         // --- SMOKE LOGIC ---
         // Funnel Top Center relative to ship center
+        // Fixed: Adjusted to -75 to align with visual top of black funnel cap
         const funnelX = -2;
-        const funnelY = -48;
+        const funnelY = -75;
         
         ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
         
@@ -701,61 +724,58 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
                 
                 // Drift Left (Negative X)
                 const driftX = -(windSpeed * 3) * puffTime; 
-                const driftY = -puffTime * 20; 
+                const riseY = -25 * puffTime;
                 
-                const alpha = Math.max(0, 1 - (puffTime / cycleDuration));
-                const size = 5 + puffTime * 5; 
+                const alpha = Math.max(0, 1 - puffTime / 1.5);
+                const scale = 1 + puffTime * 1.5;
                 
                 ctx.globalAlpha = alpha;
                 ctx.beginPath();
-                ctx.arc(funnelX + driftX, funnelY + driftY, size, 0, Math.PI*2);
+                // Ensure origin is exactly centered (funnelX) and drift applies over time
+                ctx.arc(funnelX + driftX, funnelY + riseY, 6 * scale, 0, Math.PI * 2);
                 ctx.fill();
             }
         } else {
-            // MODE 2: Stream (High Wind) - Drifting Left
-            const streamLen = 20 + windSpeed * 2.5; 
-            const segments = 20;
-            const segW = streamLen / segments;
-            
-            ctx.globalAlpha = 0.9;
+            // MODE 2: Continuous Stream (High Wind)
+            // Stream extends to the LEFT
+            ctx.globalAlpha = 0.8;
             ctx.beginPath();
-
-            const topPoints = [];
-            const bottomPoints = [];
-
+            
+            const points = [];
+            const segments = 20;
+            const lengthBase = Math.min(250, windSpeed * 4); // Length based on wind
+            
+            // Generate spine points
             for(let i=0; i<=segments; i++) {
                 const progress = i / segments; // 0 to 1
-                // Drift Left: Subtracting X
-                const px = funnelX - i * segW;
+                const x = funnelX - (progress * lengthBase); // Extend Left
                 
-                const waveAmp = 4 * progress;
-                const wave = Math.sin(t * 12 - i * 0.4) * waveAmp; 
+                // Add wave/turbulence
+                const waveAmp = 5 + (progress * 15);
+                const waveFreq = 10;
+                const waveY = Math.sin(t * 5 + progress * waveFreq) * (progress * 5); // 0 at source
                 
-                const thickness = 6 + (i * 0.6); 
-
-                topPoints.push({ x: px, y: funnelY - thickness + wave });
-                bottomPoints.push({ x: px, y: funnelY + thickness + wave });
+                const y = funnelY + waveY - (progress * 20); // Slight rise
+                
+                // Width grows
+                const width = 6 + (progress * 15);
+                
+                points.push({x, y, w: width});
             }
-
-            // Draw Top Line
-            ctx.moveTo(topPoints[0].x, topPoints[0].y);
-            for(let i=1; i<topPoints.length; i++) {
-                ctx.lineTo(topPoints[i].x, topPoints[i].y);
-            }
-
-            // Draw Round Cap at the end (Left Side)
-            const lastTop = topPoints[topPoints.length - 1];
-            const lastBottom = bottomPoints[bottomPoints.length - 1];
-            const endCenterX = (lastTop.x + lastBottom.x) / 2;
-            const endCenterY = (lastTop.y + lastBottom.y) / 2;
-            const radius = Math.abs(lastTop.y - lastBottom.y) / 2;
             
-            // Draw counter-clockwise from bottom to top to make a Left-facing cap
-            ctx.arc(endCenterX, endCenterY, radius, Math.PI/2, -Math.PI/2, false);
-
-            // Draw Bottom Line (Reverse)
-            for(let i=bottomPoints.length - 1; i>=0; i--) {
-                ctx.lineTo(bottomPoints[i].x, bottomPoints[i].y);
+            // Draw Top Edge
+            ctx.moveTo(points[0].x, points[0].y - points[0].w/2);
+            for(let i=1; i<points.length; i++) {
+                ctx.lineTo(points[i].x, points[i].y - points[i].w/2);
+            }
+            
+            // Round Tip Cap (Left side)
+            const last = points[points.length-1];
+            ctx.arc(last.x, last.y, last.w/2, 1.5 * Math.PI, 0.5 * Math.PI, true);
+            
+            // Draw Bottom Edge (Backwards)
+            for(let i=points.length-1; i>=0; i--) {
+                ctx.lineTo(points[i].x, points[i].y + points[i].w/2);
             }
             
             ctx.closePath();
@@ -763,163 +783,163 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         }
         ctx.globalAlpha = 1.0;
 
-        // --- SHIP BODY ---
+        // --- SHIP VECTOR DRAWING (Flat Style) ---
         
-        // 1. HULL (White, Flat bottom with rounded corners)
-        ctx.fillStyle = '#FDFBF7';
+        // 1. HULL
+        ctx.fillStyle = '#FFFFFF';
         ctx.beginPath();
-        ctx.moveTo(-55, 0);
-        ctx.lineTo(55, 0);
-        ctx.quadraticCurveTo(55, 30, 30, 30);
-        ctx.lineTo(-30, 30);
-        ctx.quadraticCurveTo(-55, 30, -55, 0);
+        ctx.moveTo(-60, -20); // Top Left Deck
+        ctx.lineTo(60, -20);  // Top Right Deck (Bow)
+        // Bow Curve
+        ctx.quadraticCurveTo(75, -20, 65, 10);
+        ctx.lineTo(50, 25);
+        ctx.lineTo(-50, 25);
+        // Stern Curve
+        ctx.quadraticCurveTo(-65, 10, -60, -20);
         ctx.fill();
         
-        // Texture overlay
-        if (texture) { ctx.fillStyle = texture; ctx.globalAlpha = 0.1; ctx.fill(); ctx.globalAlpha = 1; }
-
         // 2. RED STRIPE (Bottom)
         ctx.fillStyle = '#E74C3C';
         ctx.beginPath();
-        ctx.save();
-        ctx.beginPath();
-        ctx.moveTo(-55, 0);
-        ctx.lineTo(55, 0);
-        ctx.quadraticCurveTo(55, 30, 30, 30);
-        ctx.lineTo(-30, 30);
-        ctx.quadraticCurveTo(-55, 30, -55, 0);
-        ctx.clip();
-        ctx.fillRect(-60, 22, 120, 10);
-        ctx.restore();
-
-        // 3. CABIN (White block in middle)
-        ctx.fillStyle = '#FDFBF7';
-        ctx.fillRect(-35, -25, 60, 25);
-        
-        // 4. WINDOWS (3 Blue Circles)
-        ctx.fillStyle = '#5DADE2'; 
-        const winY = -12;
-        ctx.beginPath(); ctx.arc(-20, winY, 5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(-5, winY, 5, 0, Math.PI*2); ctx.fill();
-        ctx.beginPath(); ctx.arc(10, winY, 5, 0, Math.PI*2); ctx.fill();
-
-        // 5. FUNNEL (Black Top, Red Body)
-        ctx.fillStyle = '#E74C3C';
-        ctx.fillRect(-10, -42, 16, 17); 
-        ctx.fillStyle = '#2C3E50';
-        ctx.fillRect(-10, -48, 16, 6);
-
-        // 6. FLAG (Red, Stern) -> Pointing LEFT now
-        ctx.strokeStyle = '#2C3E50';
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.moveTo(-45, 0);
-        ctx.lineTo(-45, -25);
-        ctx.stroke();
-        ctx.fillStyle = '#C0392B';
-        ctx.beginPath();
-        ctx.moveTo(-45, -25);
-        ctx.lineTo(-65, -20);  // Point Left
-        ctx.lineTo(-45, -15);
+        ctx.moveTo(-50, 25);
+        ctx.lineTo(50, 25);
+        ctx.lineTo(58, 17); // Waterline approx
+        ctx.lineTo(-58, 17);
         ctx.fill();
 
-        // 7. ANCHOR (Black Icon, Bow)
+        // 3. CABIN
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(-45, -50, 65, 30); // Main block
+        
+        // 4. WINDOWS (Blue Circles)
+        ctx.fillStyle = '#5DADE2';
+        ctx.beginPath(); ctx.arc(-30, -35, 6, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(-12, -35, 6, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(6, -35, 6, 0, Math.PI*2); ctx.fill();
+
+        // 5. FUNNEL
+        const fx = -12; 
+        const fy = -50;
+        const fw = 14;
+        const fh = 20;
+        
+        // Funnel Body (Red)
+        ctx.fillStyle = '#E74C3C';
+        ctx.fillRect(fx, fy - fh, fw, fh);
+        
+        // Funnel Top (Black)
+        ctx.fillStyle = '#2C3E50';
+        ctx.fillRect(fx - 1, fy - fh - 5, fw + 2, 5);
+
+        // 6. FLAG (Red, Facing Left)
+        ctx.fillStyle = '#C0392B';
+        ctx.beginPath();
+        ctx.moveTo(-45, -50); // Mast base on cabin
+        ctx.lineTo(-45, -70); // Mast top
+        ctx.lineTo(-65, -60); // Flag Tip (Left)
+        ctx.lineTo(-45, -50); 
+        ctx.fill();
+        
+        // Mast Line
         ctx.strokeStyle = '#2C3E50';
         ctx.lineWidth = 2;
         ctx.beginPath();
-        const ax = 40, ay = 10;
-        ctx.moveTo(ax, ay - 6);
-        ctx.lineTo(ax, ay + 6);
-        ctx.moveTo(ax - 4, ay + 3);
-        ctx.quadraticCurveTo(ax, ay + 8, ax + 4, ay + 3);
+        ctx.moveTo(-45, -50);
+        ctx.lineTo(-45, -70);
+        ctx.stroke();
+
+        // 7. ANCHOR ICON (Visual on Bow)
+        ctx.strokeStyle = '#2C3E50';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const ax = 45; 
+        const ay = 0;
+        // Shank
+        ctx.moveTo(ax, ay - 8);
+        ctx.lineTo(ax, ay + 5);
+        // Arms
+        ctx.moveTo(ax - 4, ay + 2);
+        ctx.quadraticCurveTo(ax, ay + 8, ax + 4, ay + 2);
+        // Ring
         ctx.stroke();
         ctx.beginPath();
-        ctx.arc(ax, ay - 7, 1.5, 0, Math.PI*2);
+        ctx.arc(ax, ay - 10, 2, 0, Math.PI*2);
         ctx.stroke();
 
-        // --- ROD (Dynamic) ---
+
+        // --- FISHING ROD ---
         if (fishing || fishColor) {
-            ctx.strokeStyle = '#5D6D7E';
-            ctx.lineWidth = 1.5;
+            ctx.strokeStyle = '#7F8C8D';
+            ctx.lineWidth = 2;
             ctx.beginPath();
-            ctx.moveTo(25, 0); 
-            ctx.lineTo(45, -30); // Rod Tip
+            // Rod Base (Deck)
+            ctx.moveTo(35, -20);
+            // Rod Tip
+            ctx.lineTo(45, -30);
             ctx.stroke();
             
-            ctx.strokeStyle = 'white';
-            ctx.lineWidth = 0.8;
-            ctx.beginPath();
-            ctx.moveTo(45, -30);
-            
-            // Calculate Bobber Position
-            let bobberX = 45;
-            let bobberY = -30;
-            
-            if (fishColor) {
-                 // Reward Mode: Just hang there
-                 bobberX = 65;
-                 bobberY = 15;
-            } else if (animState.phase !== 'IDLE') {
-                 // Animation Mode
-                 bobberX = animState.bobberX;
-                 bobberY = animState.bobberY;
-            }
+            // Line & Bobber
+            if (!caughtFishColor) {
+                // Determine Line End Point
+                const bobberX = animState.bobberX;
+                const bobberY = animState.bobberY;
 
-            // Draw Line
-            // Only draw if active phase
-            if (fishColor || animState.phase !== 'IDLE') {
-                if (animState.phase === 'FISHING' && !fishColor) {
-                    const midX = (45 + bobberX) / 2;
-                    const slack = 15 + Math.sin(t) * 5;
-                    const midY = ((-30 + bobberY) / 2) + slack;
-                    ctx.quadraticCurveTo(midX, midY, bobberX, bobberY);
+                // Draw Line
+                ctx.strokeStyle = '#FFFFFF';
+                ctx.lineWidth = 1;
+                ctx.beginPath();
+                ctx.moveTo(45, -30); // Rod Tip
+
+                // If fishing (waiting), add slack curve
+                if (animState.phase === 'FISHING') {
+                   ctx.quadraticCurveTo(45 + (bobberX - 45)/2, bobberY + 20, bobberX, bobberY);
                 } else {
-                    ctx.lineTo(bobberX, bobberY);
+                   ctx.lineTo(bobberX, bobberY); 
                 }
                 ctx.stroke();
 
-                // Draw Bobber / Fish
-                if (fishColor) {
-                    ctx.fillStyle = fishColor;
-                    ctx.beginPath();
-                    ctx.ellipse(bobberX, bobberY, 4, 8, 0, 0, Math.PI*2);
-                    ctx.fill();
-                } else {
-                    ctx.fillStyle = '#E74C3C';
-                    ctx.beginPath();
-                    ctx.arc(bobberX, bobberY, 2.5, 0, Math.PI*2);
-                    ctx.fill();
-                }
+                // Draw Bobber (Red circle)
+                ctx.fillStyle = '#E74C3C';
+                ctx.beginPath();
+                ctx.arc(bobberX, bobberY, 4, 0, Math.PI*2);
+                ctx.fill();
             }
         }
+        
+        // Caught Fish Overlay
+        if (caughtFishColor) {
+             // Line tight to water
+             ctx.strokeStyle = '#FFFFFF';
+             ctx.lineWidth = 1.5;
+             ctx.beginPath();
+             ctx.moveTo(45, -30);
+             ctx.lineTo(60, 15);
+             ctx.stroke();
+             
+             // Fish hanging
+             ctx.fillStyle = fishColor;
+             ctx.beginPath();
+             ctx.ellipse(60, 15, 8, 5, Math.PI/2, 0, Math.PI*2);
+             ctx.fill();
+        }
+
         ctx.restore();
     };
 
-    const handleResize = () => {
-        if (containerRef.current && canvasRef.current) {
-            canvasRef.current.width = containerRef.current.clientWidth;
-            canvasRef.current.height = containerRef.current.clientHeight;
-        }
-    };
-    
-    window.addEventListener('resize', handleResize);
-    handleResize();
-
     animationFrameId = requestAnimationFrame(render);
-    
     return () => {
         cancelAnimationFrame(animationFrameId);
-        window.removeEventListener('resize', handleResize);
     };
   }, [tilt, atmosphere, isFishing, caughtFishColor]);
 
   return (
-    <div 
-        ref={containerRef} 
-        className={`absolute inset-0 w-full h-full ${isFishing ? 'pointer-events-auto cursor-pointer' : 'pointer-events-none'}`}
-        onPointerDown={handlePointerDown}
-    >
-      <canvas ref={canvasRef} className="block w-full h-full" />
+    <div className="absolute inset-0 w-full h-full pointer-events-none" ref={containerRef} onPointerDown={handlePointerDown}>
+      <canvas 
+        ref={canvasRef} 
+        width={window.innerWidth} 
+        height={window.innerHeight}
+        className={`block w-full h-full ${isFishing ? 'pointer-events-auto cursor-crosshair' : ''}`}
+      />
     </div>
   );
 };

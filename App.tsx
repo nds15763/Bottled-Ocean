@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import SimulationCanvas from './components/SimulationCanvas';
@@ -68,6 +67,23 @@ const App: React.FC = () => {
     return () => clearInterval(interval);
   }, []);
 
+  // Global Orientation Lock (Run Once)
+  useEffect(() => {
+    const lockLandscape = async () => {
+      try {
+        if (screen.orientation && (screen.orientation as any).lock) {
+           await (screen.orientation as any).lock('landscape').catch((e: any) => {
+               // Ignore errors (e.g. running on desktop)
+               console.debug("Orientation lock skipped:", e);
+           });
+        }
+      } catch (err) {
+        console.debug('Orientation lock API unavailable');
+      }
+    };
+    lockLandscape();
+  }, []);
+
   // Wake Lock Request Logic
   const requestWakeLock = useCallback(async () => {
     if ('wakeLock' in navigator) {
@@ -75,16 +91,14 @@ const App: React.FC = () => {
         wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
         console.log('Wake Lock active');
         
-        // Listener to release
         wakeLockRef.current.addEventListener('release', () => {
             console.log('Wake Lock released');
         });
 
       } catch (err: any) {
-        // Gracefully handle policy errors (e.g. running in iframe without allow="screen-wake-lock")
-        // Downgrade to debug log if it's a policy/security restriction
+        // Suppress policy errors
         if (err.name === 'NotAllowedError' || err.name === 'SecurityError' || err.message?.includes('policy') || err.message?.includes('disallowed')) {
-            console.debug('Wake Lock unavailable (policy restriction). Screen may dim.');
+            console.debug('Wake Lock disallowed by policy.');
         } else {
             console.error('Wake Lock failed:', err);
         }
@@ -92,26 +106,13 @@ const App: React.FC = () => {
     }
   }, []);
 
-  // Wake Lock & Orientation Lock Effect
+  // Wake Lock Management (Focus/Zen Modes)
   useEffect(() => {
-    const manageScreen = async () => {
-        if (mode === AppMode.FOCUSING) {
-            // 1. Request Wake Lock
+    const manageWakeLock = async () => {
+        if (mode === AppMode.FOCUSING || mode === AppMode.ZEN) {
             await requestWakeLock();
 
-            // 2. Lock Orientation to Landscape
-            try {
-                if (screen.orientation && (screen.orientation as any).lock) {
-                     await (screen.orientation as any).lock('landscape').catch((e: any) => {
-                         // Ignore errors, common on desktop or if not fullscreen
-                         console.debug("Orientation lock skipped:", e);
-                     });
-                }
-            } catch (err) {
-                console.debug('Orientation lock API unavailable');
-            }
-
-            // 3. Re-acquire Wake Lock on visibility change (Tab switching etc)
+            // Re-acquire on visibility change
             const handleVisibility = () => {
                 if (document.visibilityState === 'visible' && wakeLockRef.current === null) {
                     requestWakeLock();
@@ -126,18 +127,12 @@ const App: React.FC = () => {
                 await wakeLockRef.current.release();
                 wakeLockRef.current = null;
             }
-            // Unlock Orientation
-            if (screen.orientation && (screen.orientation as any).unlock) {
-                (screen.orientation as any).unlock();
-            }
         }
     };
 
-    const cleanupPromise = manageScreen();
+    manageWakeLock();
 
-    // Cleanup function
     return () => {
-        // We can't really await here, but we trigger release
         if (wakeLockRef.current) wakeLockRef.current.release();
     };
   }, [mode, requestWakeLock]);
@@ -225,7 +220,7 @@ const App: React.FC = () => {
     setMode(AppMode.FOCUSING);
     setShowQuitConfirm(false);
     
-    // Request Fullscreen
+    // Request Fullscreen (Manual trigger required for some browsers)
     if (!isDesktop && document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen().catch((err) => {
             console.log("Fullscreen request failed", err);
