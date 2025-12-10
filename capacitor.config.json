@@ -12,6 +12,13 @@
     "StatusBar": {
       "style": "DARK",
       "overlaysWebView": true
+    },
+    "Geolocation": {
+      "permissions": {
+        "android": {
+          "location": "always"
+        }
+      }
     }
   }
 }

@@ -11,14 +11,6 @@ export const useDeviceOrientation = () => {
   const [permissionGranted, setPermissionGranted] = useState<boolean>(false);
   const [isDesktop, setIsDesktop] = useState<boolean>(false);
 
-  // Check if device orientation is likely supported (mobile)
-  useEffect(() => {
-    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-    if (!isMobile) {
-      setIsDesktop(true);
-    }
-  }, []);
-
   const handleMotion = useCallback((event: DeviceMotionEvent) => {
     const { accelerationIncludingGravity } = event;
     if (!accelerationIncludingGravity) return;
@@ -83,6 +75,24 @@ export const useDeviceOrientation = () => {
       window.addEventListener('devicemotion', handleMotion);
     }
   };
+
+  // Check if device orientation is likely supported (mobile)
+  useEffect(() => {
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+    
+    if (!isMobile) {
+      setIsDesktop(true);
+    } else if (isAndroid) {
+      // Android doesn't require permission for DeviceMotion, auto-enable
+      setPermissionGranted(true);
+      window.addEventListener('devicemotion', handleMotion);
+    } else if (isIOS) {
+      // iOS requires permission - automatically request it
+      requestPermission();
+    }
+  }, [handleMotion, requestPermission]);
 
   // Mouse fallback for desktop
   useEffect(() => {

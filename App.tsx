@@ -71,9 +71,9 @@ const App: React.FC = () => {
   useEffect(() => {
     const lockLandscape = async () => {
       try {
+        // Attempt to lock landscape immediately
         if (screen.orientation && (screen.orientation as any).lock) {
            await (screen.orientation as any).lock('landscape').catch((e: any) => {
-               // Ignore errors (e.g. running on desktop)
                console.debug("Orientation lock skipped:", e);
            });
         }
@@ -138,19 +138,34 @@ const App: React.FC = () => {
   }, [mode, requestWakeLock]);
 
   // Weather Logic
-  const handleEnableWeather = () => {
-      if (navigator.geolocation) {
-        navigator.geolocation.getCurrentPosition(async (pos) => {
-            setLocationName(`${pos.coords.latitude.toFixed(1)}°N, ${pos.coords.longitude.toFixed(1)}°E`);
-            const weatherData = await fetchLocalWeather(pos.coords.latitude, pos.coords.longitude);
-            setAtmosphere(weatherData);
-            setWeatherEnabled(true);
-        }, (err) => {
-            console.error("Geo Error", err);
-            alert("Could not fetch location. Using simulated weather.");
-        });
-      } else {
-          alert("Geolocation not supported.");
+  const handleEnableWeather = async () => {
+      try {
+          const { Geolocation } = await import('@capacitor/geolocation');
+          
+          // Request permission and get current position
+          const position = await Geolocation.getCurrentPosition({
+              enableHighAccuracy: false, // false is faster and often more reliable for rough location
+              timeout: 15000,            // 15 seconds timeout
+              maximumAge: 60000          // Accept cached position
+          });
+          
+          const { latitude, longitude } = position.coords;
+          setLocationName(`${latitude.toFixed(1)}°N, ${longitude.toFixed(1)}°E`);
+          const weatherData = await fetchLocalWeather(latitude, longitude);
+          setAtmosphere(weatherData);
+          setWeatherEnabled(true);
+      } catch (err: any) {
+          console.error("Geo Error", err);
+          // Explicit error handling for debugging on device
+          let msg = "Unknown error";
+          if (err.message?.includes('permission') || err.message?.includes('denied')) {
+              msg = "Permission Denied. Please enable Location in Android Settings for this app.";
+          } else if (err.message?.includes('unavailable')) {
+              msg = "Position Unavailable. Check your GPS.";
+          } else if (err.message?.includes('timeout')) {
+              msg = "Request Timed Out.";
+          }
+          alert(`Location Error: ${msg}\n(${err.message || err})`);
       }
   };
 
@@ -278,18 +293,13 @@ const App: React.FC = () => {
       {/* Main Controls Center */}
       <div className="flex flex-col gap-6 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
         
-        {(!permissionGranted && !isDesktop) ? (
-            <button onClick={requestPermission} className="bg-orange-400 text-white font-bold py-3 px-8 rounded-full shadow-lg transform active:scale-95 transition crayon-box font-hand text-xl w-full">
-            Start Adventure (Enable Sensors)
-            </button>
-        ) : (
-            <>
                 <div className="bg-white p-6 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
                     <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-4 landscape:mb-2 font-hand flex items-center gap-2">
                         <Clock size={20} /> Select Focus Time
                     </h3>
                     <div className="flex justify-between gap-2">
-                        {[1, 15, 30, 45].map(m => (
+                        {/* 1m OPTION REMOVED */}
+                        {[15, 30, 45].map(m => (
                             <button key={m} onClick={() => startFocus(m)} 
                                 className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-4 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-2xl landscape:text-xl">
                                 {m}m
@@ -338,8 +348,6 @@ const App: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </>
-        )}
       </div>
       
       {/* Spacer for portrait bottom area */}
