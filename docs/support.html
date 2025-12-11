@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support - Bottled Ocean</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.1);
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 2.5em;
+        }
+        
+        .subtitle {
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 1.1em;
+        }
+        
+        h2 {
+            color: #667eea;
+            margin-top: 30px;
+            margin-bottom: 15px;
+            font-size: 1.5em;
+        }
+        
+        p {
+            margin-bottom: 15px;
+            color: #555;
+        }
+        
+        ul {
+            margin-left: 20px;
+            margin-bottom: 15px;
+        }
+        
+        li {
+            margin-bottom: 8px;
+            color: #555;
+        }
+        
+        .lang-switch {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .lang-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 1em;
+            transition: background 0.3s;
+        }
+        
+        .lang-btn:hover {
+            background: #5568d3;
+        }
+        
+        .lang-btn.active {
+            background: #764ba2;
+        }
+        
+        .content {
+            display: none;
+        }
+        
+        .content.active {
+            display: block;
+        }
+        
+        .contact-box {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 20px;
+            margin: 20px 0;
+            border-radius: 6px;
+        }
+        
+        .contact-box a {
+            color: #667eea;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        
+        .contact-box a:hover {
+            text-decoration: underline;
+        }
+        
+        .faq-item {
+            margin-bottom: 25px;
+            padding-bottom: 20px;
+            border-bottom: 1px solid #eee;
+        }
+        
+        .faq-item:last-child {
+            border-bottom: none;
+        }
+        
+        .faq-question {
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 1.1em;
+        }
+        
+        .faq-answer {
+            color: #555;
+        }
+        
+        .footer {
+            margin-top: 40px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+            color: #999;
+            font-size: 0.9em;
+        }
+        
+        @media (max-width: 600px) {
+            .container {
+                padding: 20px;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="lang-switch">
+            <button class="lang-btn active" onclick="switchLang('en')">English</button>
+            <button class="lang-btn" onclick="switchLang('zh')">中文</button>
+        </div>
+        
+        <!-- English Version -->
+        <div id="en" class="content active">
+            <h1>Support</h1>
+            <p class="subtitle">Bottled Ocean - Focus Timer for Reading</p>
+            
+            <h2>About Bottled Ocean</h2>
+            <p>Bottled Ocean is a minimalist focus timer designed specifically for readers and learners. Inspired by the calm ocean, it helps you create a distraction-free reading space.</p>
+            
+            <h2>How to Use</h2>
+            <ul>
+                <li>Open the app and set your desired focus time</li>
+                <li>Tap the timer to start your reading session</li>
+                <li>Enjoy peaceful, focused reading time</li>
+                <li>The timer will notify you when your session is complete</li>
+            </ul>
+            
+            <h2>Frequently Asked Questions</h2>
+            
+            <div class="faq-item">
+                <div class="faq-question">Q: How do I customize the timer duration?</div>
+                <div class="faq-answer">A: You can adjust the timer duration directly in the app interface. Simply tap on the time display to set your preferred reading session length.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Q: Does Bottled Ocean work offline?</div>
+                <div class="faq-answer">A: Yes! Bottled Ocean works completely offline. No internet connection is required to use the timer.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Q: Is my reading data saved?</div>
+                <div class="faq-answer">A: All your timer settings and preferences are stored locally on your device. We do not collect or store any of your data on external servers.</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">Q: Can I use Bottled Ocean for studying or other activities?</div>
+                <div class="faq-answer">A: Absolutely! While designed for reading, Bottled Ocean is perfect for any focused activity including studying, writing, or meditation.</div>
+            </div>
+            
+            <h2>Need Help?</h2>
+            <div class="contact-box">
+                <p><strong>Contact Us</strong></p>
+                <p>If you have any questions, suggestions, or issues, please reach out to us:</p>
+                <p>GitHub: <a href="https://github.com/nds15763/Bottled-Ocean" target="_blank">https://github.com/nds15763/Bottled-Ocean</a></p>
+                <p>You can open an issue on our GitHub repository, and we will respond as soon as possible.</p>
+            </div>
+            
+            <h2>Feature Requests</h2>
+            <p>We love hearing from our users! If you have ideas for new features or improvements, please share them with us on our GitHub repository.</p>
+        </div>
+        
+        <!-- Chinese Version -->
+        <div id="zh" class="content">
+            <h1>技术支持</h1>
+            <p class="subtitle">Bottled Ocean - 阅读专注计时器</p>
+            
+            <h2>关于 Bottled Ocean</h2>
+            <p>Bottled Ocean 是一款专为读者和学习者设计的极简专注计时器。灵感源自平静的海洋，帮助您营造无干扰的阅读空间。</p>
+            
+            <h2>使用方法</h2>
+            <ul>
+                <li>打开应用并设置您想要的专注时长</li>
+                <li>点击计时器开始您的阅读时段</li>
+                <li>享受平静、专注的阅读时光</li>
+                <li>时间结束时，计时器会提醒您</li>
+            </ul>
+            
+            <h2>常见问题</h2>
+            
+            <div class="faq-item">
+                <div class="faq-question">问：如何自定义计时器时长？</div>
+                <div class="faq-answer">答：您可以直接在应用界面中调整计时器时长。只需点击时间显示区域，即可设置您喜欢的阅读时长。</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">问：Bottled Ocean 可以离线使用吗？</div>
+                <div class="faq-answer">答：可以！Bottled Ocean 完全支持离线使用。使用计时器不需要网络连接。</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">问：我的阅读数据会被保存吗？</div>
+                <div class="faq-answer">答：您的所有计时器设置和偏好都存储在您的设备本地。我们不会在外部服务器上收集或存储您的任何数据。</div>
+            </div>
+            
+            <div class="faq-item">
+                <div class="faq-question">问：我可以用 Bottled Ocean 进行学习或其他活动吗？</div>
+                <div class="faq-answer">答：当然可以！虽然专为阅读设计，但 Bottled Ocean 适用于任何需要专注的活动，包括学习、写作或冥想。</div>
+            </div>
+            
+            <h2>需要帮助？</h2>
+            <div class="contact-box">
+                <p><strong>联系我们</strong></p>
+                <p>如果您有任何问题、建议或遇到问题，请联系我们：</p>
+                <p>GitHub: <a href="https://github.com/nds15763/Bottled-Ocean" target="_blank">https://github.com/nds15763/Bottled-Ocean</a></p>
+                <p>您可以在我们的 GitHub 仓库中提交 Issue，我们会尽快回复。</p>
+            </div>
+            
+            <h2>功能建议</h2>
+            <p>我们很乐意听取用户的反馈！如果您有新功能或改进的想法，请在我们的 GitHub 仓库中分享。</p>
+        </div>
+        
+        <div class="footer">
+            <p>&copy; 2024 Bottled Ocean. All rights reserved.</p>
+        </div>
+    </div>
+    
+    <script>
+        function switchLang(lang) {
+            document.querySelectorAll('.content').forEach(el => {
+                el.classList.remove('active');
+            });
+            
+            document.querySelectorAll('.lang-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            document.getElementById(lang).classList.add('active');
+            
+            event.target.classList.add('active');
+        }
+    </script>
+</body>
+</html>
