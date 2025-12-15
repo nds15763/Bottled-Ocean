@@ -1,11 +1,13 @@
+
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useDeviceOrientation } from './hooks/useDeviceOrientation';
 import SimulationCanvas from './components/SimulationCanvas';
+import AquariumCanvas from './components/AquariumCanvas';
 import { generateFishLore } from './services/geminiService';
 import { fetchLocalWeather } from './services/weatherService';
-import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
+import { AppMode, WeatherType, Fish, AtmosphereState, AquariumFish } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
-import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake, Flower } from 'lucide-react';
+import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake, Coins, Fish as FishIcon } from 'lucide-react';
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
@@ -32,12 +34,6 @@ const App: React.FC = () => {
   const [locationName, setLocationName] = useState<string>("Unknown Waters");
   const [weatherEnabled, setWeatherEnabled] = useState(false);
   const [currentTime, setCurrentTime] = useState<string>("");
-  
-  // Debug / Zen State
-  const [debugHour, setDebugHour] = useState(12);
-  const [debugWind, setDebugWind] = useState(1); // Default to 1
-  const [debugWeather, setDebugWeather] = useState<WeatherType>(WeatherType.SUNNY);
-  const [zenPanelOpen, setZenPanelOpen] = useState(false);
 
   // Game State
   const [focusDuration, setFocusDuration] = useState<number>(15);
@@ -47,13 +43,36 @@ const App: React.FC = () => {
   const [loadingLore, setLoadingLore] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
   
-  // Collection
+  // Data Persistence
   const [collection, setCollection] = useState<string[]>([]);
+  const [coins, setCoins] = useState<number>(0);
+  const [aquariumFish, setAquariumFish] = useState<AquariumFish[]>([]);
 
-  // Init Collection
+  // Init Data & Demo Fish
   useEffect(() => {
-    const saved = localStorage.getItem('bottled_ocean_collection');
-    if (saved) setCollection(JSON.parse(saved));
+    const savedCollection = localStorage.getItem('bottled_ocean_collection');
+    if (savedCollection) setCollection(JSON.parse(savedCollection));
+
+    const savedCoins = localStorage.getItem('bottled_ocean_coins');
+    if (savedCoins) setCoins(parseInt(savedCoins, 10));
+
+    const savedTank = localStorage.getItem('bottled_ocean_tank');
+    if (savedTank && savedTank !== '[]') {
+        setAquariumFish(JSON.parse(savedTank));
+    } else {
+        // --- ADD DEMO SCHOOL (5 Fish) if tank is empty ---
+        console.log("Empty tank detected, adding demo school...");
+        const w = window.innerWidth;
+        const h = window.innerHeight;
+        const demoSchool: AquariumFish[] = [
+            { instanceId: 1, fishId: 'clownfish', x: w*0.2, y: h*0.2, targetX: w/2, targetY: h/2, angle: 0, speed: 1.5, flipX: false },
+            { instanceId: 2, fishId: 'blue_tang', x: w*0.8, y: h*0.2, targetX: w/2, targetY: h/2, angle: Math.PI, speed: 1.8, flipX: true },
+            { instanceId: 3, fishId: 'origami_crab', x: w*0.2, y: h*0.8, targetX: w/2, targetY: h/2, angle: 0, speed: 1.2, flipX: false },
+            { instanceId: 4, fishId: 'lantern_fish', x: w*0.8, y: h*0.8, targetX: w/2, targetY: h/2, angle: Math.PI, speed: 1.4, flipX: true },
+            { instanceId: 5, fishId: 'clownfish', x: w*0.5, y: h*0.9, targetX: w/2, targetY: h/2, angle: -Math.PI/2, speed: 1.6, flipX: false },
+        ];
+        setAquariumFish(demoSchool);
+    }
   }, []);
 
   // Time ticker for Dashboard
@@ -71,7 +90,6 @@ const App: React.FC = () => {
   useEffect(() => {
     const lockLandscape = async () => {
       try {
-        // Attempt to lock landscape immediately
         if (screen.orientation && (screen.orientation as any).lock) {
            await (screen.orientation as any).lock('landscape').catch((e: any) => {
                console.debug("Orientation lock skipped:", e);
@@ -89,30 +107,20 @@ const App: React.FC = () => {
     if ('wakeLock' in navigator) {
       try {
         wakeLockRef.current = await (navigator as any).wakeLock.request('screen');
-        console.log('Wake Lock active');
-        
         wakeLockRef.current.addEventListener('release', () => {
             console.log('Wake Lock released');
         });
-
       } catch (err: any) {
-        // Suppress policy errors
-        if (err.name === 'NotAllowedError' || err.name === 'SecurityError' || err.message?.includes('policy') || err.message?.includes('disallowed')) {
-            console.debug('Wake Lock disallowed by policy.');
-        } else {
-            console.error('Wake Lock failed:', err);
-        }
+         console.debug('Wake Lock disallowed', err);
       }
     }
   }, []);
 
-  // Wake Lock Management (Focus/Zen Modes)
+  // Wake Lock Management (Focus/Aquarium Modes)
   useEffect(() => {
     const manageWakeLock = async () => {
-        if (mode === AppMode.FOCUSING || mode === AppMode.ZEN) {
+        if (mode === AppMode.FOCUSING || mode === AppMode.AQUARIUM) {
             await requestWakeLock();
-
-            // Re-acquire on visibility change
             const handleVisibility = () => {
                 if (document.visibilityState === 'visible' && wakeLockRef.current === null) {
                     requestWakeLock();
@@ -122,109 +130,45 @@ const App: React.FC = () => {
             return () => document.removeEventListener('visibilitychange', handleVisibility);
 
         } else {
-            // Release Wake Lock
             if (wakeLockRef.current) {
                 await wakeLockRef.current.release();
                 wakeLockRef.current = null;
             }
         }
     };
-
     manageWakeLock();
-
     return () => {
         if (wakeLockRef.current) wakeLockRef.current.release();
     };
   }, [mode, requestWakeLock]);
 
   // Weather Logic
-  const handleEnableWeather = async () => {
-      try {
-          const { Geolocation } = await import('@capacitor/geolocation');
-          
-          // Request permission and get current position
-          const position = await Geolocation.getCurrentPosition({
-              enableHighAccuracy: false, // false is faster and often more reliable for rough location
-              timeout: 15000,            // 15 seconds timeout
-              maximumAge: 60000          // Accept cached position
-          });
-          
-          const { latitude, longitude } = position.coords;
-          setLocationName(`${latitude.toFixed(1)}°N, ${longitude.toFixed(1)}°E`);
-          const weatherData = await fetchLocalWeather(latitude, longitude);
-          setAtmosphere(weatherData);
-          setWeatherEnabled(true);
-      } catch (err: any) {
-          console.error("Geo Error", err);
-          
-          // Detect platform for appropriate error messages
-          const platform = (() => {
-              const ua = navigator.userAgent;
-              if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
-              if (/Android/i.test(ua)) return 'Android';
-              return 'Browser';
-          })();
-          
-          // Platform-specific error handling
-          let msg = "Unknown error";
-          if (err.message?.includes('permission') || err.message?.includes('denied')) {
-              if (platform === 'iOS') {
-                  msg = "Permission Denied. Please enable Location in iOS Settings for this app.";
-              } else if (platform === 'Android') {
-                  msg = "Permission Denied. Please enable Location in Android Settings for this app.";
-              } else {
-                  msg = "Permission Denied. Please enable Location in your browser settings.";
-              }
-          } else if (err.message?.includes('unavailable')) {
-              msg = "Position Unavailable. Check your GPS.";
-          } else if (err.message?.includes('timeout')) {
-              msg = "Request Timed Out.";
-          }
-          alert(`Location Error: ${msg}\n(${err.message || err})`);
+  const handleEnableWeather = () => {
+      if (navigator.geolocation) {
+        const options = {
+            enableHighAccuracy: false, 
+            timeout: 15000,           
+            maximumAge: 60000          
+        };
+
+        navigator.geolocation.getCurrentPosition(async (pos) => {
+            setLocationName(`${pos.coords.latitude.toFixed(1)}°N, ${pos.coords.longitude.toFixed(1)}°E`);
+            const weatherData = await fetchLocalWeather(pos.coords.latitude, pos.coords.longitude);
+            setAtmosphere(weatherData);
+            setWeatherEnabled(true);
+        }, (err) => {
+            let msg = "Unknown error";
+            switch(err.code) {
+                case 1: msg = "Permission Denied. Please enable Location in Android Settings."; break;
+                case 2: msg = "Position Unavailable."; break;
+                case 3: msg = "Request Timed Out."; break;
+            }
+            alert(`Location Error: ${msg}`);
+        }, options);
+      } else {
+          alert("Geolocation is not supported.");
       }
   };
-
-  // Debug / Zen Mode Effect
-  useEffect(() => {
-    if (mode === AppMode.ZEN) {
-        // Calculate physics based on debug sliders (Max wind 50)
-        
-        // Amplitude: 1:1 Mapping. Wind 1 = 1px.
-        // If wind is 0, give it a tiny bit of life (0.5)
-        let waveAmp = debugWind === 0 ? 0.5 : debugWind;
-        
-        // Speed: Map 0-50 wind to sensible speed range
-        // Wind 0 = 0.05 (Static breathing)
-        // Wind 1 = 0.08 (Very slow)
-        // Wind 50 = 1.2 (Fast)
-        let waveSpeed = 0.05 + (debugWind / 50) * 1.15;
-        
-        // Storm overrides
-        let isStorm = debugWeather === WeatherType.STORM;
-        if (isStorm) {
-            waveAmp = Math.max(waveAmp, 45);
-            waveSpeed = Math.max(waveSpeed, 1.0);
-        }
-
-        // Day/Night logic based on slider
-        const isDay = debugHour >= 6 && debugHour <= 18;
-        
-        // Rainbow logic (Only day, sunny or rainy)
-        const hasRainbow = isDay && debugWeather === WeatherType.SUNNY && Math.random() < 0.2;
-
-        setAtmosphere({
-            type: debugWeather,
-            localHour: debugHour,
-            waveAmp,
-            waveSpeed,
-            windSpeed: debugWind,
-            temperature: debugWeather === WeatherType.SNOW ? -2 : 20, 
-            hasRainbow,
-            isDay,
-            lightning: isStorm
-        });
-    }
-  }, [mode, debugHour, debugWind, debugWeather]);
 
   // Timer Logic
   useEffect(() => {
@@ -244,16 +188,15 @@ const App: React.FC = () => {
   }, [mode, timeLeft]);
 
   // Actions
-  const startFocus = async (min: number) => {
-    // 请求陀螺仪权限（iOS/Android）
-    if (!permissionGranted && !isDesktop) {
-      await requestPermission();
-    }
-    
+  const startFocus = (min: number) => {
     setFocusDuration(min);
     setTimeLeft(min * 60);
     setMode(AppMode.FOCUSING);
     setShowQuitConfirm(false);
+    
+    if (!isDesktop && document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen().catch(() => {});
+    }
   };
 
   const handleSuccess = async () => {
@@ -261,21 +204,46 @@ const App: React.FC = () => {
     setCaughtFish(fish);
     setMode(AppMode.REWARD);
     
-    // Save
+    // Unlock in collection immediately (Pokedex entry logic)
     const newColl = [...new Set([...collection, fish.id])];
     setCollection(newColl);
     localStorage.setItem('bottled_ocean_collection', JSON.stringify(newColl));
 
-    // Lore
     setLoadingLore(true);
     const text = await generateFishLore(fish, atmosphere.type);
     setLore(text);
     setLoadingLore(false);
+    
+    if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
+  };
+
+  // Reward Decisions
+  const handleSellFish = () => {
+      if (!caughtFish) return;
+      const newBalance = coins + caughtFish.price;
+      setCoins(newBalance);
+      localStorage.setItem('bottled_ocean_coins', newBalance.toString());
+      setMode(AppMode.MENU);
+  };
+
+  const handleKeepFish = () => {
+      if (!caughtFish) return;
+      const newFish: AquariumFish = {
+          instanceId: Date.now(),
+          fishId: caughtFish.id,
+          x: 0, y: 0, targetX: 0, targetY: 0, angle: 0, speed: 1, // Defaults, handled by AquariumCanvas
+          flipX: false
+      };
+      const newTank = [...aquariumFish, newFish];
+      setAquariumFish(newTank);
+      localStorage.setItem('bottled_ocean_tank', JSON.stringify(newTank));
+      setMode(AppMode.AQUARIUM);
   };
 
   const handleQuit = () => {
       setMode(AppMode.MENU);
       setShowQuitConfirm(false);
+      if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
   };
 
   const formatTime = (s: number) => {
@@ -289,6 +257,14 @@ const App: React.FC = () => {
   const renderMenu = () => (
     <div className="absolute inset-0 flex flex-col landscape:flex-row items-center justify-between landscape:justify-center p-6 landscape:gap-12 animate-fade-in pointer-events-auto z-50 overflow-y-auto landscape:overflow-hidden">
       
+      {/* Coin Display - Fixed Top Right */}
+      <div className="absolute top-6 right-6 z-50 animate-bounce-in">
+        <div className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-full border-2 border-yellow-300 text-yellow-700 font-bold font-hand shadow-sm transform hover:scale-105 transition">
+            <Coins size={20} /> 
+            <span className="text-xl">{coins}</span>
+        </div>
+      </div>
+
       {/* Header Area */}
       <div className="text-center landscape:text-left space-y-2 mt-10 landscape:mt-0 landscape:flex-1 landscape:flex landscape:flex-col landscape:items-start landscape:pl-8">
         <h1 className="text-6xl md:text-8xl landscape:text-6xl font-black text-sky-600 drop-shadow-sm font-hand -rotate-2">
@@ -303,12 +279,17 @@ const App: React.FC = () => {
       {/* Main Controls Center */}
       <div className="flex flex-col gap-6 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
         
-                <div className="bg-white p-6 landscape:p-5 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 transform rotate-1 shadow-xl">
+        {(!permissionGranted && !isDesktop) ? (
+            <button onClick={requestPermission} className="bg-orange-400 text-white font-bold py-3 px-8 rounded-full shadow-lg transform active:scale-95 transition crayon-box font-hand text-xl w-full">
+            Start Adventure (Enable Sensors)
+            </button>
+        ) : (
+            <>
+                <div className="bg-white p-6 landscape:p-5 rounded-2xl crayon-box transform rotate-1 shadow-xl">
                     <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-4 landscape:mb-2 font-hand flex items-center gap-2">
                         <Clock size={20} /> Select Focus Time
                     </h3>
                     <div className="flex justify-between gap-2">
-                        {/* 1m OPTION REMOVED */}
                         {[15, 30, 45].map(m => (
                             <button key={m} onClick={() => startFocus(m)} 
                                 className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-4 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-2xl landscape:text-xl">
@@ -320,24 +301,17 @@ const App: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                     <button onClick={() => setMode(AppMode.COLLECTION)} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
+                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
                         <BookOpen className="text-orange-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
                     </button>
-                    <button onClick={async () => {
-                        // 请求陀螺仪权限（iOS/Android）
-                        if (!permissionGranted && !isDesktop) {
-                            await requestPermission();
-                        }
-                        setMode(AppMode.ZEN);
-                    }} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
-                        <Flower className="text-emerald-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
+                    <button onClick={() => setMode(AppMode.AQUARIUM)} 
+                        className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
+                        <FishIcon className="text-emerald-500" size={32} />
+                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">My Tank</span>
                     </button>
                 </div>
                 
-                 {/* Weather Sync Button (Integrated into Right Column for Landscape) */}
                 <div className="w-full">
                     {!weatherEnabled ? (
                         <button 
@@ -364,21 +338,19 @@ const App: React.FC = () => {
                         </div>
                     )}
                 </div>
+            </>
+        )}
       </div>
-      
-      {/* Spacer for portrait bottom area */}
       <div className="landscape:hidden h-8"></div>
     </div>
   );
 
   const renderFocusing = () => (
     <>
-       {/* Minimal HUD Card (Spliced Style) */}
        <div 
          className="absolute top-8 right-8 z-40 pointer-events-auto flex flex-col animate-fade-in rounded-3xl w-56"
          style={{ boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' }}
        >
-           {/* Top Section: Time */}
            <div className="bg-white/95 backdrop-blur-md pt-5 pb-3 rounded-t-3xl border-2 border-b-0 border-slate-200 flex flex-col items-center w-full">
                <span className="text-6xl font-hand font-bold text-slate-700 tracking-wider tabular-nums leading-none mb-1">
                  {formatTime(timeLeft)}
@@ -388,7 +360,6 @@ const App: React.FC = () => {
                </div>
            </div>
            
-           {/* Bottom Section: Stop Button (Spliced) */}
            <button 
              onClick={() => setShowQuitConfirm(true)}
              className="w-full bg-red-50 hover:bg-red-100 text-red-500 py-3 rounded-b-3xl font-bold font-hand text-lg transition border-2 border-t border-red-100 flex items-center justify-center gap-2 active:bg-red-200 group"
@@ -397,23 +368,15 @@ const App: React.FC = () => {
            </button>
        </div>
 
-       {/* Quit Confirmation Modal */}
        {showQuitConfirm && (
         <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in pointer-events-auto">
           <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center border-2 border-white/50">
-            
-            <div className="bg-orange-100 p-4 rounded-full text-orange-500 mb-4 shadow-sm transform -rotate-3">
-                <Anchor size={40} />
-            </div>
-            
             <h2 className="text-3xl font-black text-slate-800 font-hand mb-2">Reel in the line?</h2>
-
             <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-center w-full mb-6">
                 <p className="font-hand text-lg text-slate-600 leading-snug">
                     If you stop now, the fish will get away!
                 </p>
             </div>
-
             <div className="flex gap-3 w-full">
                 <button onClick={() => setShowQuitConfirm(false)} 
                     className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl font-hand text-lg border-2 border-slate-200 transition active:scale-95">
@@ -432,28 +395,40 @@ const App: React.FC = () => {
 
   const renderReward = () => (
     <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 w-80 shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center">
+      <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 w-96 shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center">
         
-        <div className="text-6xl filter drop-shadow-xl mb-4 transform hover:scale-110 transition cursor-pointer">
+        <div className="text-8xl filter drop-shadow-xl mb-6 transform hover:scale-110 transition cursor-pointer">
             {caughtFish?.icon}
         </div>
         
-        <h2 className="text-3xl font-black text-slate-800 font-hand mb-2">{caughtFish?.name}</h2>
-        <div className="inline-block px-4 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200 mb-4">
-            {caughtFish?.rarity}
+        <h2 className="text-4xl font-black text-slate-800 font-hand mb-2">{caughtFish?.name}</h2>
+        <div className="flex items-center gap-2 mb-4">
+             <div className="inline-block px-4 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200">
+                {caughtFish?.rarity}
+            </div>
+            <div className="inline-block px-4 py-1 bg-yellow-100 text-yellow-700 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-yellow-300">
+                {caughtFish?.price} coins
+            </div>
         </div>
 
-        <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-left relative w-full">
-            <div className="absolute -top-3 -left-2 bg-yellow-200 w-8 h-8 rounded-full opacity-50"></div>
-            <p className="font-hand text-base text-slate-600 relative z-10 leading-relaxed italic">
-                {loadingLore ? "The fisherman is writing in his journal..." : `"${lore}"`}
+        <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-left relative w-full mb-6">
+            <p className="font-hand text-lg text-slate-600 relative z-10 leading-relaxed italic text-center">
+                {loadingLore ? "Identifying..." : `"${lore}"`}
             </p>
         </div>
 
-        <button onClick={() => setMode(AppMode.MENU)} 
-            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-2xl font-hand text-lg shadow-lg border-b-4 border-sky-700 active:border-b-0 active:translate-y-1 transition-all mt-6">
-            Awesome!
-        </button>
+        <div className="flex gap-4 w-full">
+            <button onClick={handleSellFish} 
+                className="flex-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-bold py-4 rounded-2xl font-hand text-lg border-2 border-yellow-300 active:scale-95 transition flex flex-col items-center gap-1">
+                <Coins size={24} />
+                Sell
+            </button>
+            <button onClick={handleKeepFish} 
+                className="flex-1 bg-emerald-100 hover:bg-emerald-200 text-emerald-700 font-bold py-4 rounded-2xl font-hand text-lg border-2 border-emerald-300 active:scale-95 transition flex flex-col items-center gap-1">
+                <FishIcon size={24} />
+                Keep
+            </button>
+        </div>
 
       </div>
     </div>
@@ -463,7 +438,7 @@ const App: React.FC = () => {
     <div className="absolute inset-0 z-50 bg-slate-50 overflow-y-auto pointer-events-auto">
         <div className="p-6 pb-24 max-w-3xl mx-auto">
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-slate-50/90 backdrop-blur py-4 z-10">
-                <h2 className="text-4xl font-bold text-slate-800 font-hand">My FishDex</h2>
+                <h2 className="text-4xl font-bold text-slate-800 font-hand">FishDex</h2>
                 <button onClick={() => setMode(AppMode.MENU)} className="p-2 bg-white rounded-full shadow border hover:bg-gray-100">
                     <X size={24} />
                 </button>
@@ -480,7 +455,7 @@ const App: React.FC = () => {
                                 <>
                                     <div className="text-5xl mb-2 transform transition hover:scale-110 cursor-pointer">{fish.icon}</div>
                                     <p className="font-hand font-bold text-lg text-slate-700 leading-none">{fish.name}</p>
-                                    <span className="text-[10px] uppercase font-bold text-slate-400 mt-2 tracking-widest">{fish.rarity}</span>
+                                    <span className="text-xs font-bold text-slate-400 mt-2">{fish.rarity}</span>
                                 </>
                             ) : (
                                 <span className="text-4xl opacity-20 grayscale">{fish.icon}</span>
@@ -493,138 +468,74 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderZen = () => (
-      <div className="absolute inset-0 pointer-events-none z-40 flex flex-col justify-end items-center pb-8 transition-all">
-          {zenPanelOpen ? (
-            <div className="bg-white/95 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-slate-200 pointer-events-auto w-full max-w-lg mx-4 crayon-box animate-bounce-in absolute bottom-8">
-                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                      <h3 className="font-hand font-bold text-2xl text-slate-700 flex items-center gap-2">
-                          <Settings className="text-slate-400" size={24}/>
-                          Environment Control
-                      </h3>
-                      <button onClick={() => setZenPanelOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-500 transition">
-                         <ChevronDown size={24} />
-                     </button>
-                  </div>
+  const renderAquarium = () => (
+      <div className="absolute inset-0 z-40 flex flex-col pointer-events-none">
+          {/* AQUARIUM CANVAS RENDERED IN BACKGROUND OF THIS MODE */}
+          <div className="absolute inset-0 pointer-events-auto">
+            <AquariumCanvas fishList={aquariumFish} />
+          </div>
 
-                  {/* Controls Grid */}
-                  <div className="space-y-6">
-                      
-                      {/* Time Slider */}
-                      <div className="space-y-2">
-                          <div className="flex justify-between font-hand font-bold text-slate-600">
-                              <span>Time of Day</span>
-                              <span>{debugHour.toFixed(1)} h</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="0" max="24" step="0.1" 
-                            value={debugHour}
-                            onChange={(e) => setDebugHour(parseFloat(e.target.value))}
-                            className="w-full h-3 bg-gradient-to-r from-slate-900 via-sky-400 to-slate-900 rounded-lg appearance-none cursor-pointer"
-                          />
-                      </div>
-
-                       {/* Wind Slider */}
-                       <div className="space-y-2">
-                          <div className="flex justify-between font-hand font-bold text-slate-600">
-                              <span>Wind Speed</span>
-                              <span>{debugWind} km/h</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="0" max="50" step="1" 
-                            value={debugWind}
-                            onChange={(e) => setDebugWind(parseInt(e.target.value))}
-                            className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
-                          />
-                      </div>
-
-                      {/* Weather Type */}
-                      <div className="grid grid-cols-5 gap-2">
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.SUNNY)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Sun size={18}/> Sun
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.RAINY)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <CloudDrizzle size={18}/> Rain
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.STORM)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <CloudLightning size={18}/> Storm
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.NIGHT)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Moon size={18}/> Night
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.SNOW)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.SNOW ? 'bg-cyan-100 border-cyan-400 text-cyan-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Snowflake size={18}/> Snow
-                          </button>
-                      </div>
-
-                  </div>
+          {/* UI OVERLAY */}
+          <div className="relative z-50 p-6 flex justify-between items-start pointer-events-none">
+              <div className="bg-white/90 backdrop-blur p-4 rounded-3xl shadow-lg border-2 border-slate-200 flex flex-col items-start gap-1 pointer-events-auto">
+                 <h2 className="font-hand font-bold text-2xl text-slate-700">My Aquarium</h2>
+                 <p className="font-hand text-slate-500 text-sm">Long press to feed/attract</p>
+                 <div className="flex items-center gap-1 mt-2 text-slate-600 font-bold font-hand text-sm bg-slate-100 px-3 py-1 rounded-full">
+                     <FishIcon size={14}/> {aquariumFish.length} Fish
+                 </div>
               </div>
-          ) : (
-              <div 
-                  className="bg-white/90 backdrop-blur-md px-6 py-4 rounded-full shadow-xl border-2 border-slate-200 pointer-events-auto flex items-center gap-6 cursor-pointer hover:scale-105 transition-all animate-bounce-in absolute bottom-8 crayon-box"
-                  onClick={() => setZenPanelOpen(true)}
-              >
-                  <div className="flex items-center gap-3">
-                     <span className="font-hand font-bold text-slate-700 text-xl">Zen Mode</span>
-                  </div>
-                  
-                  {/* Status Indicators */}
-                  <div className="hidden sm:flex items-center gap-3 text-slate-500 text-sm border-l-2 border-slate-200 pl-6">
-                        <div className="flex items-center gap-1">
-                            {atmosphere.isDay ? <Sun size={16} className="text-orange-400"/> : <Moon size={16} className="text-indigo-400"/>}
-                            <span className="font-bold font-hand">{debugHour.toFixed(1)}h</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                             <Wind size={16} className="text-teal-500"/>
-                             <span className="font-bold font-hand">{debugWind}</span>
-                        </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 ml-4 border-l-2 border-slate-200 pl-6">
-                      <div className="p-2 bg-sky-100 text-sky-600 rounded-full hover:bg-sky-200 transition">
-                          <Settings size={20} />
-                      </div>
-                      <button 
-                          onClick={(e) => { e.stopPropagation(); setMode(AppMode.MENU); }} 
-                          className="p-2 bg-red-100 text-red-500 rounded-full hover:bg-red-200 transition"
-                      >
-                          <LogOut size={20} />
-                      </button>
-                  </div>
+              <div className="flex gap-4 pointer-events-auto">
+                 {/* Coin Display in Aquarium too */}
+                 <div className="flex items-center gap-2 bg-yellow-100 px-4 py-2 rounded-full border-2 border-yellow-300 text-yellow-700 font-bold font-hand shadow-sm">
+                    <Coins size={20} /> 
+                    <span className="text-xl">{coins}</span>
+                 </div>
+
+                 <button onClick={() => setMode(AppMode.MENU)} 
+                      className="bg-white/90 backdrop-blur p-4 rounded-full shadow-lg border-2 border-slate-200 text-slate-700 hover:bg-white active:scale-95 transition">
+                      <LogOut size={24} />
+                  </button>
               </div>
-          )}
+          </div>
       </div>
   );
 
   return (
     <div className="relative w-full h-screen overflow-hidden bg-sky-100 text-slate-800 select-none">
       
-      {/* Background Canvas */}
-      <SimulationCanvas 
-         tilt={orientation.tilt} 
-         atmosphere={atmosphere}
-         isFishing={mode === AppMode.FOCUSING} 
-         caughtFishColor={mode === AppMode.REWARD ? caughtFish?.color : null}
-      />
+      {/* Contextual Canvas Rendering */}
+      {mode === AppMode.FOCUSING ? (
+           <SimulationCanvas 
+             tilt={orientation.tilt} 
+             atmosphere={atmosphere}
+             isFishing={true} 
+             caughtFishColor={null}
+          />
+      ) : mode === AppMode.REWARD ? (
+           <SimulationCanvas 
+             tilt={orientation.tilt} 
+             atmosphere={atmosphere}
+             isFishing={true} 
+             caughtFishColor={caughtFish?.color}
+          />
+      ) : mode === AppMode.MENU || mode === AppMode.COLLECTION ? (
+           <SimulationCanvas 
+             tilt={orientation.tilt} 
+             atmosphere={atmosphere}
+             isFishing={false} 
+             caughtFishColor={null}
+          />
+      ) : null}
+
+      {/* Aquarium Logic is standalone */}
+      {mode === AppMode.AQUARIUM && renderAquarium()}
 
       {/* Main UI Router */}
       {mode === AppMode.MENU && renderMenu()}
       {mode === AppMode.FOCUSING && renderFocusing()}
       {mode === AppMode.REWARD && renderReward()}
       {mode === AppMode.COLLECTION && renderCollection()}
-      {mode === AppMode.ZEN && renderZen()}
 
     </div>
   );
