@@ -37,7 +37,8 @@ export const useDeviceOrientation = () => {
     
     // Normalize by gravity (approx 9.8). Result is sin(angle).
     // Clamped to -1 to 1.
-    let normalizedTilt = y / 9.8;
+    // Negative sign to correct direction: right tilt → right movement
+    let normalizedTilt = -y / 9.8;
     
     // Invert sign if needed based on testing (Positive Y usually means tilting "Right" in landscape? depends on device rotation)
     // Let's assume standard behavior:

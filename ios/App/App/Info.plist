@@ -39,8 +39,12 @@
 	<array>
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationPortraitUpsideDown</string>
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<true/>
+	<key>UIStatusBarHidden</key>
 	<true/>
 	<key>UIStatusBarOrientation</key>
 	<string>UIInterfaceOrientationLandscapeLeft</string>

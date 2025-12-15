@@ -26,7 +26,7 @@ export enum AppMode {
   FOCUSING = 'FOCUSING',
   REWARD = 'REWARD',
   COLLECTION = 'COLLECTION',
-  ZEN = 'ZEN'
+  AQUARIUM = 'AQUARIUM' // Replaces ZEN
 }
 
 export enum WeatherType {
@@ -34,16 +34,16 @@ export enum WeatherType {
   RAINY = 'RAINY',
   STORM = 'STORM',
   NIGHT = 'NIGHT',
-  SNOW = 'SNOW' // Added for completeness, mapped to cold style later
+  SNOW = 'SNOW'
 }
 
 export interface AtmosphereState {
   type: WeatherType;
-  localHour: number;    // 0 - 24, for celestial position and sky gradient
-  waveAmp: number;      // 10 - 60
-  waveSpeed: number;    // 0.5 - 2.5
-  windSpeed: number;    // Display purpose
-  temperature: number;  // Added for dashboard
+  localHour: number;    
+  waveAmp: number;      
+  waveSpeed: number;    
+  windSpeed: number;    
+  temperature: number;  
   hasRainbow: boolean;
   isDay: boolean;
   lightning: boolean;
@@ -58,9 +58,36 @@ export interface Fish {
   minDurationMinutes: number;
   icon: string; 
   color: string;
+  price: number; // Value in coins
+  spriteUrl: string; // New: Image source for the fish
+}
+
+// Instance of a fish inside the Aquarium
+export interface AquariumFish {
+  instanceId: number; // Unique ID for movement logic
+  fishId: string;     // Reference to Fish DB
+  x: number;
+  y: number;
+  angle: number;
+  speed: number;
+  targetX: number;
+  targetY: number;
+  flipX: boolean; // Visual facing direction
+}
+
+export interface Decoration {
+  id: string;
+  x: number;
+  y: number;
+  type: 'plant' | 'structure' | 'toy';
+  spriteUrl: string;
+  scale: number;
+  zIndex: number; // For layering (front/back)
 }
 
 export interface UserProgress {
   caughtFishIds: string[];
   totalFocusMinutes: number;
+  coins: number;
+  aquariumFish: AquariumFish[]; // Fish currently swimming in the tank
 }

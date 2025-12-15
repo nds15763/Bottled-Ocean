@@ -156,10 +156,25 @@ const App: React.FC = () => {
           setWeatherEnabled(true);
       } catch (err: any) {
           console.error("Geo Error", err);
-          // Explicit error handling for debugging on device
+          
+          // Detect platform for appropriate error messages
+          const platform = (() => {
+              const ua = navigator.userAgent;
+              if (/iPhone|iPad|iPod/i.test(ua)) return 'iOS';
+              if (/Android/i.test(ua)) return 'Android';
+              return 'Browser';
+          })();
+          
+          // Platform-specific error handling
           let msg = "Unknown error";
           if (err.message?.includes('permission') || err.message?.includes('denied')) {
-              msg = "Permission Denied. Please enable Location in Android Settings for this app.";
+              if (platform === 'iOS') {
+                  msg = "Permission Denied. Please enable Location in iOS Settings for this app.";
+              } else if (platform === 'Android') {
+                  msg = "Permission Denied. Please enable Location in Android Settings for this app.";
+              } else {
+                  msg = "Permission Denied. Please enable Location in your browser settings.";
+              }
           } else if (err.message?.includes('unavailable')) {
               msg = "Position Unavailable. Check your GPS.";
           } else if (err.message?.includes('timeout')) {
@@ -229,18 +244,16 @@ const App: React.FC = () => {
   }, [mode, timeLeft]);
 
   // Actions
-  const startFocus = (min: number) => {
+  const startFocus = async (min: number) => {
+    // 请求陀螺仪权限（iOS/Android）
+    if (!permissionGranted && !isDesktop) {
+      await requestPermission();
+    }
+    
     setFocusDuration(min);
     setTimeLeft(min * 60);
     setMode(AppMode.FOCUSING);
     setShowQuitConfirm(false);
-    
-    // Request Fullscreen (Manual trigger required for some browsers)
-    if (!isDesktop && document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen().catch((err) => {
-            console.log("Fullscreen request failed", err);
-        });
-    }
   };
 
   const handleSuccess = async () => {
@@ -258,14 +271,11 @@ const App: React.FC = () => {
     const text = await generateFishLore(fish, atmosphere.type);
     setLore(text);
     setLoadingLore(false);
-    
-    if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
   };
 
   const handleQuit = () => {
       setMode(AppMode.MENU);
       setShowQuitConfirm(false);
-      if (document.exitFullscreen) document.exitFullscreen().catch(()=>{});
   };
 
   const formatTime = (s: number) => {
@@ -314,7 +324,13 @@ const App: React.FC = () => {
                         <BookOpen className="text-orange-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
                     </button>
-                    <button onClick={() => setMode(AppMode.ZEN)} 
+                    <button onClick={async () => {
+                        // 请求陀螺仪权限（iOS/Android）
+                        if (!permissionGranted && !isDesktop) {
+                            await requestPermission();
+                        }
+                        setMode(AppMode.ZEN);
+                    }} 
                         className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
                         <Flower className="text-emerald-500" size={32} />
                         <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>

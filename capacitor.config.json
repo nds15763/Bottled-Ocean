@@ -5,13 +5,20 @@
   "server": {
     "androidScheme": "https"
   },
+  "ios": {
+    "contentInset": "never",
+    "allowsLinkPreview": false
+  },
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0
     },
     "StatusBar": {
       "style": "DARK",
-      "overlaysWebView": true
+      "overlaysWebView": false,
+      "ios": {
+        "style": "Dark"
+      }
     },
     "Geolocation": {
       "permissions": {
