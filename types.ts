@@ -50,6 +50,14 @@ export interface AtmosphereState {
   lightning: boolean;
 }
 
+export interface FishAnimation {
+  wiggleSpeed: number;
+  wiggleAmount: number;
+  bobSpeed: number;
+  bobAmount: number;
+  tiltFactor: number;
+}
+
 export interface Fish {
   id: string;
   name: string;
@@ -59,31 +67,44 @@ export interface Fish {
   minDurationMinutes: number;
   icon: string; 
   color: string;
-  price: number; // Value in coins
-  spriteUrl: string; // New: Image source for the fish
+  price: number; 
+  spriteUrl: string;
+  width: number;
+  height: number;
+  animation: FishAnimation;
 }
+
+export type FishState = 'swimming' | 'approaching' | 'interacting' | 'fleeing';
 
 // Instance of a fish inside the Aquarium
 export interface AquariumFish {
-  instanceId: number; // Unique ID for movement logic
+  instanceId: string; // Unique ID for movement logic
   fishId: string;     // Reference to Fish DB
   x: number;
   y: number;
-  angle: number;
   speed: number;
   targetX: number;
   targetY: number;
   flipX: boolean; // Visual facing direction
+  state: FishState;
+  stateStartTime: number;
 }
 
 export interface Decoration {
   id: string;
+  name: string;
+  type: 'plant' | 'structure' | 'toy' | 'weed' | 'castle' | 'pot' | 'clam';
+  spriteUrl: string;
+  price: number;
+}
+
+export interface PlacedDecoration {
+  instanceId: string;
+  decorId: string;
   x: number;
   y: number;
-  type: 'plant' | 'structure' | 'toy';
-  spriteUrl: string;
-  scale: number;
-  zIndex: number; // For layering (front/back)
+  flipped: boolean;
+  scale?: number;
 }
 
 export interface UserProgress {

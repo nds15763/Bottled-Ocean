@@ -14,13 +14,10 @@ const createFishInstance = (fishId: string): AquariumFish => {
     y: Math.random() * (h * 0.6),
     targetX: Math.random() * w,
     targetY: Math.random() * (h * 0.6),
-    angle: 0,
     speed: 1.0 + Math.random() * 0.5,
     flipX: Math.random() > 0.5,
     state: 'swimming',
     stateStartTime: Date.now(),
-    currentFrame: 0,
-    animationTimer: 0,
   };
 };
 

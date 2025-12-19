@@ -1,10 +1,11 @@
 
 import React, { useRef, useEffect, useState } from 'react';
-import { AquariumFish, Decoration } from '../types';
-import { FISH_DB, DECORATION_ASSETS } from '../utils/gameData';
+import { AquariumFish, PlacedDecoration } from '../types';
+import { FISH_DB, DECOR_DB } from '../utils/gameData';
 
 interface AquariumCanvasProps {
   fishList: AquariumFish[];
+  decorationList: PlacedDecoration[];
   lightRayAlpha?: number;
 }
 
@@ -31,13 +32,13 @@ const useImagePreloader = (sources: string[]) => {
     return images;
 };
 
-const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
+const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList, decorationList }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Physics & Game State Refs
   const fishesRef = useRef<AquariumFish[]>([]);
-  const decorRef = useRef<Decoration[]>([]);
+  const decorRef = useRef<PlacedDecoration[]>([]);
   const initializedRef = useRef(false);
 
   // Interaction State
@@ -49,7 +50,7 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
 
   // Gather all image sources needed
   const allFishSprites = FISH_DB.map(f => f.spriteUrl);
-  const allDecorSprites = Object.values(DECORATION_ASSETS);
+  const allDecorSprites = DECOR_DB.map(d => d.spriteUrl);
   const loadedImages = useImagePreloader([...allFishSprites, ...allDecorSprites]);
 
   // Canvas Dimensions - 3x Width, 2x Height
@@ -69,9 +70,11 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
       initializedRef.current = true;
   }, []);
 
-  // Sync Fish Props
+  // Sync Fish & Decor Props
   useEffect(() => {
       const { width, height } = getDimensions();
+      
+      // Sync Fish
       const newFishes: AquariumFish[] = fishList.map(f => {
           const existing = fishesRef.current.find(ex => ex.instanceId === f.instanceId);
           if (existing) return existing; 
@@ -82,13 +85,17 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
               y: Math.random() * (height - 300),
               targetX: Math.random() * width,
               targetY: Math.random() * (height - 300),
-              angle: 0,
               speed: 0.5 + Math.random() * 0.5,
-              flipX: false
+              flipX: false,
+              state: 'swimming',
+              stateStartTime: Date.now()
           };
       });
       fishesRef.current = newFishes;
-  }, [fishList]);
+
+      // Sync Decor
+      decorRef.current = decorationList;
+  }, [fishList, decorationList]);
 
   // Handle Input
   const updatePointer = (e: React.PointerEvent | PointerEvent) => {
@@ -174,24 +181,33 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
       ctx.restore();
 
       // 2. Draw Decorations (Sorted by Y/Z)
-      decorRef.current.forEach(decor => {
-          const img = loadedImages[decor.spriteUrl];
+      decorRef.current.forEach(placed => {
+          const dbDecor = DECOR_DB.find(d => d.id === placed.decorId);
+          if (!dbDecor) return;
+
+          const img = loadedImages[dbDecor.spriteUrl];
           if (img) {
-              const size = 120 * decor.scale;
+              const scale = placed.scale || 1.0;
+              const size = 120 * scale;
               // Simple bobbing for weeds
-              const yOff = decor.type === 'weed' ? Math.sin(time*2 + decor.x)*5 : 0;
+              const yOff = dbDecor.type === 'weed' ? Math.sin(time*2 + placed.x)*5 : 0;
               
-              ctx.drawImage(img, decor.x, decor.y - size + yOff, size, size);
+              ctx.save();
+              ctx.translate(placed.x, placed.y);
+              if (placed.flipped) ctx.scale(-1, 1);
+              
+              ctx.drawImage(img, -size/2, -size + yOff, size, size);
               
               // Shadow
               ctx.fillStyle = 'rgba(0,0,0,0.1)';
               ctx.beginPath();
-              ctx.ellipse(decor.x + size/2, decor.y + yOff + 5, size/3, size/10, 0, 0, Math.PI*2);
+              ctx.ellipse(0, yOff + 5, size/3, size/10, 0, 0, Math.PI*2);
               ctx.fill();
+              ctx.restore();
           }
       });
 
-      // 3. Draw Fish (Sprites)
+      // 3. Draw Fish (Sprites + Procedural Animation)
       fishesRef.current.forEach(fish => {
           let targetX = fish.targetX;
           let targetY = fish.targetY;
@@ -216,34 +232,43 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
               }
           }
 
-          // Move
+          // Move Physics
           const dx = targetX - fish.x;
           const dy = targetY - fish.y;
-          const angle = Math.atan2(dy, dx);
+          const moveAngle = Math.atan2(dy, dx);
           
-          fish.x += Math.cos(angle) * fish.speed * speedMult;
-          fish.y += Math.sin(angle) * fish.speed * speedMult;
+          fish.x += Math.cos(moveAngle) * fish.speed * speedMult;
+          fish.y += Math.sin(moveAngle) * fish.speed * speedMult;
 
           // Flip Logic (Face direction of movement)
           if (dx > 0) fish.flipX = true; // Right
           if (dx < 0) fish.flipX = false; // Left
 
-          // Draw Sprite
+          // Draw Sprite with Procedural Animation
           const dbFish = FISH_DB.find(f => f.id === fish.fishId);
           if (dbFish && loadedImages[dbFish.spriteUrl]) {
               const img = loadedImages[dbFish.spriteUrl];
-              const w = 100;
-              const h = 60;
+              const { width: w, height: h, animation: anim } = dbFish;
               
               ctx.save();
               ctx.translate(fish.x, fish.y);
               
+              // A. Directional Tilt (Up/Down movement)
+              // Only tilt if moving horizontally significantly
+              const tilt = Math.atan2(dy, Math.abs(dx)) * anim.tiltFactor;
+              ctx.rotate(tilt);
+
+              // B. Flip
               if (!fish.flipX) {
-                  ctx.scale(-1, 1); // Flip horizontally
+                  ctx.scale(-1, 1);
               }
               
-              // Idle Bobbing
-              const bob = Math.sin(time * 3 + fish.instanceId) * 5;
+              // C. Body Wiggle (Procedural)
+              const wiggle = Math.sin(time * anim.wiggleSpeed + fish.stateStartTime) * anim.wiggleAmount;
+              ctx.scale(1 + wiggle, 1 - wiggle);
+
+              // D. Idle Bobbing (Procedural)
+              const bob = Math.sin(time * anim.bobSpeed + fish.stateStartTime) * anim.bobAmount;
               
               // Draw Image centered
               ctx.drawImage(img, -w/2, -h/2 + bob, w, h);

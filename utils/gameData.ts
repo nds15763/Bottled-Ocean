@@ -1,88 +1,99 @@
 
-import { Fish, WeatherType } from '../types';
+import { Fish, WeatherType, FishAnimation, Decoration } from '../types';
 
-// --- ASSET GENERATION (Embedded SVGs for "Neko Atsume" Style) ---
-// These simulate hand-drawn, thick-outline assets.
+// --- ASSET PATHS ---
+const ASSETS_PATH = '/assets/fish';
 
+// --- HELPERS ---
 const SVG_HEADER = "data:image/svg+xml;base64,";
-
 const b64 = (str: string) => window.btoa(str);
 
-const createFishSVG = (color1: string, color2: string, shape: 'round' | 'long' | 'ray' | 'crab') => {
-  let path = "";
-  if (shape === 'round') {
-     // Cute chubby fish (Clownfish style)
-     path = `<path d="M10,25 Q10,5 30,5 Q60,5 80,25 Q90,30 95,15 L95,35 Q90,20 80,25 Q60,45 30,45 Q10,45 10,25 Z" fill="${color1}" stroke="#4A3B32" stroke-width="3" stroke-linejoin="round"/>
-             <path d="M30,5 Q25,25 30,45" fill="none" stroke="#4A3B32" stroke-width="3" />
-             <path d="M55,5 Q50,25 55,45" fill="none" stroke="#4A3B32" stroke-width="3" />
-             <circle cx="20" cy="20" r="3" fill="#000" />`;
-  } else if (shape === 'long') {
-     // Long fish (Trout style)
-     path = `<ellipse cx="50" cy="25" rx="45" ry="15" fill="${color1}" stroke="#4A3B32" stroke-width="3" />
-             <path d="M5,25 L-5,15 L-5,35 Z" fill="${color2}" stroke="#4A3B32" stroke-width="3" />
-             <path d="M30,25 L40,15 M60,25 L70,35" stroke="${color2}" stroke-width="3" />
-             <circle cx="80" cy="20" r="3" fill="#000" />`;
-  } else if (shape === 'ray') {
-     // Ray/Flat
-     path = `<path d="M10,25 Q50,-10 90,25 Q50,60 10,25 Z" fill="${color1}" stroke="#4A3B32" stroke-width="3" />
-             <path d="M90,25 Q110,30 130,60" fill="none" stroke="#4A3B32" stroke-width="2" />
-             <circle cx="30" cy="20" r="2" fill="#000" />
-             <circle cx="30" cy="30" r="2" fill="#000" />`;
-  } else if (shape === 'crab') {
-     // Crab
-     path = `<ellipse cx="50" cy="30" rx="25" ry="15" fill="${color1}" stroke="#4A3B32" stroke-width="3" />
-             <path d="M25,30 L10,15 L15,10 Z M75,30 L90,15 L85,10 Z" fill="${color2}" stroke="#4A3B32" stroke-width="3" />
-             <path d="M30,40 L20,50 M35,42 L30,52 M65,42 L70,52 M70,40 L80,50" stroke="#4A3B32" stroke-width="3" />
-             <circle cx="40" cy="25" r="2" fill="#000" />
-             <circle cx="60" cy="25" r="2" fill="#000" />`;
-  }
-  
-  return SVG_HEADER + b64(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 150 80" width="100" height="60">${path}</svg>`);
+// --- DEFAULT ANIMATIONS ---
+const DEFAULT_ANIMATION: FishAnimation = {
+  wiggleSpeed: 3.5,
+  wiggleAmount: 0.05,
+  bobSpeed: 1.5,
+  bobAmount: 3,
+  tiltFactor: 0.5
 };
 
-// --- FISH DATABASE WITH SPRITES ---
+const FAST_ANIMATION: FishAnimation = {
+  wiggleSpeed: 6.0,
+  wiggleAmount: 0.08,
+  bobSpeed: 2.5,
+  bobAmount: 2,
+  tiltFactor: 0.3
+};
+
+const SLOW_ANIMATION: FishAnimation = {
+  wiggleSpeed: 1.5,
+  wiggleAmount: 0.03,
+  bobSpeed: 1.0,
+  bobAmount: 5,
+  tiltFactor: 0.8
+};
+
+// --- FISH DATABASE ---
 
 export const FISH_DB: Fish[] = [
   // Common
   { 
     id: 'clownfish', name: 'Nemo-ish', rarity: 'Common', description: 'Just a normal clownfish.', minDurationMinutes: 1, icon: '🐠', color: '#FF7E67', price: 10,
-    spriteUrl: createFishSVG('#FFAB91', '#FFF', 'round')
+    spriteUrl: `${ASSETS_PATH}/clownfish.png`,
+    width: 100, height: 60,
+    animation: DEFAULT_ANIMATION
   },
   { 
     id: 'blue_tang', name: 'Dory-ish', rarity: 'Common', description: 'Keeps forgetting things.', minDurationMinutes: 1, icon: '🐟', color: '#4A90E2', price: 12,
-    spriteUrl: createFishSVG('#5DADE2', '#F1C40F', 'round')
+    spriteUrl: `${ASSETS_PATH}/blue_tang.png`,
+    width: 100, height: 60,
+    animation: DEFAULT_ANIMATION
   },
   { 
     id: 'origami_crab', name: 'Paper Crab', rarity: 'Common', description: 'Careful with the claws.', minDurationMinutes: 1, icon: '🦀', color: '#E74C3C', price: 15,
-    spriteUrl: createFishSVG('#E74C3C', '#C0392B', 'crab')
+    spriteUrl: `${ASSETS_PATH}/crab.png`,
+    width: 80, height: 50,
+    animation: { ...FAST_ANIMATION, bobAmount: 1 } // Crabs bob less
   },
   
   // Rare
   { 
     id: 'lantern_fish', name: 'Lantern Fish', rarity: 'Rare', description: 'Lights up the dark.', minDurationMinutes: 25, icon: '🏮', color: '#F1C40F', price: 50,
-    spriteUrl: createFishSVG('#34495E', '#F1C40F', 'long')
+    spriteUrl: `${ASSETS_PATH}/lantern_fish.png`,
+    width: 120, height: 80,
+    animation: SLOW_ANIMATION
   },
   { 
     id: 'cloud_jelly', name: 'Cloud Jelly', rarity: 'Rare', description: 'Floats like a cloud.', minDurationMinutes: 25, icon: '🪼', color: '#ECF0F1', price: 60,
-    spriteUrl: createFishSVG('#D7BDE2', '#FFF', 'round') 
+    spriteUrl: `${ASSETS_PATH}/jelly.png`,
+    width: 90, height: 110,
+    animation: { ...SLOW_ANIMATION, wiggleAmount: 0.1, bobAmount: 10 }
   },
   { 
     id: 'rain_boot', name: 'Old Boot', rarity: 'Rare', description: 'A classic catch.', weatherRequirement: [WeatherType.RAINY], minDurationMinutes: 10, icon: '👢', color: '#F39C12', price: 40,
-    spriteUrl: createFishSVG('#D35400', '#A04000', 'long') // Reusing long shape for boot abstractly
+    spriteUrl: `${ASSETS_PATH}/boot.png`,
+    width: 80, height: 80,
+    animation: { ...SLOW_ANIMATION, wiggleSpeed: 0, wiggleAmount: 0 } // Boots don't wiggle
   },
   
   // Legendary
   { 
     id: 'moon_ray', name: 'Moon Ray', rarity: 'Legendary', description: 'Graceful glider.', weatherRequirement: [WeatherType.NIGHT], minDurationMinutes: 30, icon: '🛸', color: '#9B59B6', price: 200,
-    spriteUrl: createFishSVG('#8E44AD', '#FFF', 'ray')
+    spriteUrl: `${ASSETS_PATH}/moon_ray.png`,
+    width: 150, height: 100,
+    animation: SLOW_ANIMATION
   },
   { 
     id: 'rainbow_trout', name: 'Prism Trout', rarity: 'Legendary', description: 'Shines with all colors.', weatherRequirement: [WeatherType.SUNNY], minDurationMinutes: 45, icon: '🌈', color: '#2ECC71', price: 250,
-    spriteUrl: createFishSVG('#ABEBC6', '#58D68D', 'long')
+    spriteUrl: `${ASSETS_PATH}/rainbow_trout.png`,
+    width: 130, height: 70,
+    animation: FAST_ANIMATION
   },
   { 
     id: 'message_bottle', name: 'Message Bottle', rarity: 'Legendary', description: 'SOS.', minDurationMinutes: 40, icon: '📜', color: '#D35400', price: 500,
-    spriteUrl: createFishSVG('#F5CBA7', '#FFF', 'long')
+    spriteUrl: `${ASSETS_PATH}/bottle.png`,
+    width: 60, height: 100,
+    animation: { ...SLOW_ANIMATION, wiggleSpeed: 0 }
   },
 ];
 
@@ -146,3 +157,10 @@ export const DECORATION_ASSETS = {
     weed: createDecorSVG('weed'),
     clam: createDecorSVG('clam'),
 };
+
+export const DECOR_DB: Decoration[] = [
+    { id: 'castle', name: 'Sand Castle', type: 'castle', spriteUrl: DECORATION_ASSETS.castle, price: 100 },
+    { id: 'pot', name: 'Ancient Pot', type: 'pot', spriteUrl: DECORATION_ASSETS.pot, price: 80 },
+    { id: 'weed', name: 'Seaweed', type: 'weed', spriteUrl: DECORATION_ASSETS.weed, price: 20 },
+    { id: 'clam', name: 'Giant Clam', type: 'clam', spriteUrl: DECORATION_ASSETS.clam, price: 150 },
+];

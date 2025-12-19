@@ -66,11 +66,11 @@ const App: React.FC = () => {
         const w = window.innerWidth;
         const h = window.innerHeight;
         const demoSchool: AquariumFish[] = [
-            { instanceId: 1, fishId: 'clownfish', x: w*0.2, y: h*0.2, targetX: w/2, targetY: h/2, angle: 0, speed: 1.5, flipX: false },
-            { instanceId: 2, fishId: 'blue_tang', x: w*0.8, y: h*0.2, targetX: w/2, targetY: h/2, angle: Math.PI, speed: 1.8, flipX: true },
-            { instanceId: 3, fishId: 'origami_crab', x: w*0.2, y: h*0.8, targetX: w/2, targetY: h/2, angle: 0, speed: 1.2, flipX: false },
-            { instanceId: 4, fishId: 'lantern_fish', x: w*0.8, y: h*0.8, targetX: w/2, targetY: h/2, angle: Math.PI, speed: 1.4, flipX: true },
-            { instanceId: 5, fishId: 'clownfish', x: w*0.5, y: h*0.9, targetX: w/2, targetY: h/2, angle: -Math.PI/2, speed: 1.6, flipX: false },
+            { instanceId: '1', fishId: 'clownfish', x: w*0.2, y: h*0.2, targetX: w/2, targetY: h/2, speed: 1.5, flipX: false, state: 'swimming', stateStartTime: Date.now() },
+            { instanceId: '2', fishId: 'blue_tang', x: w*0.8, y: h*0.2, targetX: w/2, targetY: h/2, speed: 1.8, flipX: true, state: 'swimming', stateStartTime: Date.now() },
+            { instanceId: '3', fishId: 'origami_crab', x: w*0.2, y: h*0.8, targetX: w/2, targetY: h/2, speed: 1.2, flipX: false, state: 'swimming', stateStartTime: Date.now() },
+            { instanceId: '4', fishId: 'lantern_fish', x: w*0.8, y: h*0.8, targetX: w/2, targetY: h/2, speed: 1.4, flipX: true, state: 'swimming', stateStartTime: Date.now() },
+            { instanceId: '5', fishId: 'clownfish', x: w*0.5, y: h*0.9, targetX: w/2, targetY: h/2, speed: 1.6, flipX: false, state: 'swimming', stateStartTime: Date.now() },
         ];
         setAquariumFish(demoSchool);
     }
@@ -230,10 +230,12 @@ const App: React.FC = () => {
   const handleKeepFish = () => {
       if (!caughtFish) return;
       const newFish: AquariumFish = {
-          instanceId: Date.now(),
+          instanceId: crypto.randomUUID(),
           fishId: caughtFish.id,
-          x: 0, y: 0, targetX: 0, targetY: 0, angle: 0, speed: 1, // Defaults, handled by AquariumCanvas
-          flipX: false
+          x: 0, y: 0, targetX: 0, targetY: 0, speed: 1, // Defaults, handled by AquariumCanvas
+          flipX: false,
+          state: 'swimming',
+          stateStartTime: Date.now()
       };
       const newTank = [...aquariumFish, newFish];
       setAquariumFish(newTank);
