@@ -59,14 +59,9 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList, decorationLis
       height: window.innerHeight * 2.0 
   });
 
-  // Init World (Place Decor)
+  // Init World
   useEffect(() => {
       if (initializedRef.current) return;
-      
-      // Removed auto-generated floating decorations as requested by user
-      const newDecor: Decoration[] = [];
-      
-      decorRef.current = newDecor;
       initializedRef.current = true;
   }, []);
 
