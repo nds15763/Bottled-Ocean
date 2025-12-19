@@ -26,7 +26,8 @@ export enum AppMode {
   FOCUSING = 'FOCUSING',
   REWARD = 'REWARD',
   COLLECTION = 'COLLECTION',
-  AQUARIUM = 'AQUARIUM' // Replaces ZEN
+  AQUARIUM = 'AQUARIUM', // Replaces ZEN
+  ZEN = 'ZEN'
 }
 
 export enum WeatherType {

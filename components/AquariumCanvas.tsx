@@ -62,45 +62,8 @@ const AquariumCanvas: React.FC<AquariumCanvasProps> = ({ fishList }) => {
   useEffect(() => {
       if (initializedRef.current) return;
       
-      const { width, height } = getDimensions();
-      const floorY = height - 80;
-      
+      // Removed auto-generated floating decorations as requested by user
       const newDecor: Decoration[] = [];
-      const count = Math.floor(width / 150); // Place items every 150px approx
-      
-      for(let i=0; i<count; i++) {
-          const r = Math.random();
-          const x = (i * 150) + (Math.random() * 50);
-          
-          // Slight depth variance for pseudo-3D
-          const depth = Math.random(); 
-          const y = floorY - (depth * 100); 
-          const scale = 0.8 + (depth * 0.4); // Farther things smaller? Actually in 2D, lower Y is further back often, or higher Y is closer. Let's say Higher Y is closer.
-          // Let's keep it simple: Y is vertical pos. Lower on screen (Higher Y value) = Closer = Bigger.
-          
-          let type: any = 'weed';
-          let asset = DECORATION_ASSETS.weed;
-          
-          if (r > 0.8) { 
-              type = 'structure'; asset = DECORATION_ASSETS.castle; 
-          } else if (r > 0.6) {
-              type = 'toy'; asset = DECORATION_ASSETS.pot;
-          } else if (r > 0.5) {
-              type = 'toy'; asset = DECORATION_ASSETS.clam;
-          }
-
-          newDecor.push({
-              id: `decor_${i}`,
-              x, y,
-              type,
-              spriteUrl: asset,
-              scale: scale,
-              zIndex: y // Simple z-sorting by Y position
-          });
-      }
-      
-      // Sort by Z (Y-position) so front items draw last
-      newDecor.sort((a, b) => a.zIndex - b.zIndex);
       
       decorRef.current = newDecor;
       initializedRef.current = true;

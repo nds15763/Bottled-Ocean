@@ -42,6 +42,7 @@ const App: React.FC = () => {
   const [lore, setLore] = useState<string>("");
   const [loadingLore, setLoadingLore] = useState(false);
   const [showQuitConfirm, setShowQuitConfirm] = useState(false);
+  const [showAquariumDetail, setShowAquariumDetail] = useState(false);
   
   // Data Persistence
   const [collection, setCollection] = useState<string[]>([]);
@@ -300,15 +301,15 @@ const App: React.FC = () => {
                 </div>
 
                 <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => setMode(AppMode.COLLECTION)} 
+                    <button onClick={() => setMode(AppMode.ZEN)} 
                         className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
-                        <BookOpen className="text-orange-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
+                        <Sun className="text-orange-500" size={32} />
+                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
                     </button>
                     <button onClick={() => setMode(AppMode.AQUARIUM)} 
                         className="bg-white p-4 landscape:p-3 rounded-2xl crayon-box flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
                         <FishIcon className="text-emerald-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">My Tank</span>
+                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">My Aquarium</span>
                     </button>
                 </div>
                 
@@ -434,12 +435,21 @@ const App: React.FC = () => {
     </div>
   );
 
-  const renderCollection = () => (
+  const renderCollection = () => {
+    const handleClose = () => {
+        if (mode === AppMode.AQUARIUM) {
+            setShowAquariumDetail(false);
+        } else {
+            setMode(AppMode.MENU);
+        }
+    };
+
+    return (
     <div className="absolute inset-0 z-50 bg-slate-50 overflow-y-auto pointer-events-auto">
         <div className="p-6 pb-24 max-w-3xl mx-auto">
             <div className="flex justify-between items-center mb-8 sticky top-0 bg-slate-50/90 backdrop-blur py-4 z-10">
                 <h2 className="text-4xl font-bold text-slate-800 font-hand">FishDex</h2>
-                <button onClick={() => setMode(AppMode.MENU)} className="p-2 bg-white rounded-full shadow border hover:bg-gray-100">
+                <button onClick={handleClose} className="p-2 bg-white rounded-full shadow border hover:bg-gray-100">
                     <X size={24} />
                 </button>
             </div>
@@ -466,7 +476,8 @@ const App: React.FC = () => {
             </div>
         </div>
     </div>
-  );
+    );
+  };
 
   const renderAquarium = () => (
       <div className="absolute inset-0 z-40 flex flex-col pointer-events-none">
@@ -477,13 +488,19 @@ const App: React.FC = () => {
 
           {/* UI OVERLAY */}
           <div className="relative z-50 p-6 flex justify-between items-start pointer-events-none">
-              <div className="bg-white/90 backdrop-blur p-4 rounded-3xl shadow-lg border-2 border-slate-200 flex flex-col items-start gap-1 pointer-events-auto">
+              <button 
+                onClick={() => setShowAquariumDetail(true)}
+                className="bg-white/90 backdrop-blur p-4 rounded-3xl shadow-lg border-2 border-slate-200 flex flex-col items-start gap-1 pointer-events-auto hover:bg-white active:scale-95 transition text-left"
+              >
                  <h2 className="font-hand font-bold text-2xl text-slate-700">My Aquarium</h2>
                  <p className="font-hand text-slate-500 text-sm">Long press to feed/attract</p>
-                 <div className="flex items-center gap-1 mt-2 text-slate-600 font-bold font-hand text-sm bg-slate-100 px-3 py-1 rounded-full">
-                     <FishIcon size={14}/> {aquariumFish.length} Fish
+                 <div className="flex items-center gap-2 mt-2">
+                     <div className="flex items-center gap-1 text-slate-600 font-bold font-hand text-sm bg-slate-100 px-3 py-1 rounded-full">
+                         <FishIcon size={14}/> {aquariumFish.length} Fish
+                     </div>
+                     <span className="text-sky-500 font-hand font-bold text-xs">View Detail →</span>
                  </div>
-              </div>
+              </button>
 
               <div className="flex gap-4 pointer-events-auto">
                  {/* Coin Display in Aquarium too */}
@@ -498,7 +515,20 @@ const App: React.FC = () => {
                   </button>
               </div>
           </div>
+
+          {showAquariumDetail && renderCollection()}
       </div>
+  );
+
+  const renderZenMode = () => (
+    <div className="absolute inset-0 z-40 flex flex-col pointer-events-none">
+        <div className="relative z-50 p-6 flex justify-end pointer-events-auto">
+            <button onClick={() => setMode(AppMode.MENU)} 
+                className="bg-white/90 backdrop-blur p-4 rounded-full shadow-lg border-2 border-slate-200 text-slate-700 hover:bg-white active:scale-95 transition">
+                <LogOut size={24} />
+            </button>
+        </div>
+    </div>
   );
 
   return (
@@ -519,7 +549,7 @@ const App: React.FC = () => {
              isFishing={true} 
              caughtFishColor={caughtFish?.color}
           />
-      ) : mode === AppMode.MENU || mode === AppMode.COLLECTION ? (
+      ) : mode === AppMode.MENU || mode === AppMode.COLLECTION || mode === AppMode.ZEN ? (
            <SimulationCanvas 
              tilt={orientation.tilt} 
              atmosphere={atmosphere}
@@ -530,6 +560,7 @@ const App: React.FC = () => {
 
       {/* Aquarium Logic is standalone */}
       {mode === AppMode.AQUARIUM && renderAquarium()}
+      {mode === AppMode.ZEN && renderZenMode()}
 
       {/* Main UI Router */}
       {mode === AppMode.MENU && renderMenu()}
