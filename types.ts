@@ -26,6 +26,7 @@ export enum AppMode {
   FOCUSING = 'FOCUSING',
   REWARD = 'REWARD',
   COLLECTION = 'COLLECTION',
+  ZEN = 'ZEN',
   AQUARIUM = 'AQUARIUM' // Replaces ZEN
 }
 

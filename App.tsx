@@ -206,8 +206,8 @@ const App: React.FC = () => {
             waveSpeed = Math.max(waveSpeed, 1.0);
         }
 
-        // Day/Night logic based on slider
-        const isDay = debugHour >= 6 && debugHour <= 18;
+        // Day/Night logic based on slider (5:00-20:00 allows Golden Dawn & After-Rain Dusk!)
+        const isDay = debugHour >= 5 && debugHour < 20;
         
         // Rainbow logic (Only day, sunny or rainy)
         const hasRainbow = isDay && debugWeather === WeatherType.SUNNY && Math.random() < 0.2;
@@ -278,334 +278,467 @@ const App: React.FC = () => {
       setShowQuitConfirm(false);
   };
 
+  const applySeaPreset = (preset: 'SUNNY' | 'RAINY' | 'STORM' | 'DUSK') => {
+    setWeatherEnabled(false);
+    if (preset === 'SUNNY') {
+      setDebugWeather(WeatherType.SUNNY);
+      setDebugHour(11.5);
+      setDebugWind(2);
+      setAtmosphere({
+        type: WeatherType.SUNNY,
+        localHour: 11.5,
+        waveAmp: 2,
+        waveSpeed: 0.12,
+        windSpeed: 2,
+        temperature: 23,
+        hasRainbow: false,
+        isDay: true,
+        lightning: false,
+      });
+    } else if (preset === 'RAINY') {
+      setDebugWeather(WeatherType.RAINY);
+      setDebugHour(15.0);
+      setDebugWind(22);
+      setAtmosphere({
+        type: WeatherType.RAINY,
+        localHour: 15.0,
+        waveAmp: 22,
+        waveSpeed: 0.56,
+        windSpeed: 22,
+        temperature: 17,
+        hasRainbow: false,
+        isDay: true,
+        lightning: false,
+      });
+    } else if (preset === 'STORM') {
+      setDebugWeather(WeatherType.STORM);
+      setDebugHour(16.0);
+      setDebugWind(38);
+      setAtmosphere({
+        type: WeatherType.STORM,
+        localHour: 16.0,
+        waveAmp: 45,
+        waveSpeed: 1.0,
+        windSpeed: 38,
+        temperature: 15,
+        hasRainbow: false,
+        isDay: true,
+        lightning: true,
+      });
+    } else {
+      setDebugWeather(WeatherType.SUNNY);
+      setDebugHour(18.2);
+      setDebugWind(4);
+      setAtmosphere({
+        type: WeatherType.SUNNY,
+        localHour: 18.2,
+        waveAmp: 4,
+        waveSpeed: 0.15,
+        windSpeed: 4,
+        temperature: 19,
+        hasRainbow: false,
+        isDay: true,
+        lightning: false,
+      });
+    }
+  };
+
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
     return `${m}:${sec < 10 ? '0' : ''}${sec}`;
   };
 
-  // --- UI RENDERERS ---
+  // --- UI RENDERERS (Refined Nordic Coastal Editorial Theme) ---
 
   const renderMenu = () => (
-    <div className="absolute inset-0 flex flex-col landscape:flex-row items-center justify-between landscape:justify-center p-6 landscape:gap-12 animate-fade-in pointer-events-auto z-50 overflow-y-auto landscape:overflow-hidden">
+    <div className="absolute inset-0 flex flex-col landscape:flex-row items-center justify-between p-6 landscape:px-14 animate-fade-in pointer-events-auto z-50 overflow-y-auto landscape:overflow-hidden">
       
-      {/* Header Area */}
-      <div className="text-center landscape:text-left space-y-2 mt-10 landscape:mt-0 landscape:flex-1 landscape:flex landscape:flex-col landscape:items-start landscape:pl-8">
-        <h1 className="text-6xl md:text-8xl landscape:text-6xl font-black text-sky-600 drop-shadow-sm font-hand -rotate-2">
+      {/* Left Header Area: Quiet Editorial Title */}
+      <div className="text-center landscape:text-left space-y-2.5 mt-6 landscape:mt-0 landscape:max-w-md landscape:flex landscape:flex-col landscape:items-start landscape:self-start landscape:pt-10">
+        <div className="inline-flex items-center gap-2 text-[#F4EDE0]/85 text-xs tracking-[0.22em] uppercase font-bold">
+          <Anchor size={13} className="text-[#FBE29A]" />
+          <span>Bottled Ocean</span>
+        </div>
+        <h1 className="text-4xl md:text-5xl landscape:text-5xl font-bold text-[#FAF4E8] tracking-wide drop-shadow-[0_2px_10px_rgba(12,30,48,0.35)]">
           Focus Fishing
         </h1>
-        <div className="flex items-center justify-center landscape:justify-start gap-2 text-slate-500 font-bold font-hand text-lg landscape:text-xl">
-            <Anchor size={20} /> 
-            <span>Put your phone in a bottle</span>
+        <div className="w-16 h-[1.5px] bg-[#F4EDE0]/45 mx-auto landscape:mx-0"></div>
+        <p className="text-[#E6EEF4]/90 text-sm landscape:text-base font-medium tracking-wide drop-shadow-[0_1px_6px_rgba(12,30,48,0.35)]">
+          Put your phone in a bottle · Drift with wind &amp; tide
+        </p>
+      </div>
+
+      {/* Right Controls Column: Nordic Midnight-Slate Glass Cards */}
+      <div className="flex flex-col gap-3.5 w-full max-w-sm landscape:w-80 landscape:justify-center">
+        
+        <div className="nordic-panel p-5 landscape:p-4">
+          <h3 className="text-sm uppercase tracking-[0.14em] font-bold text-[#B8CEDD] mb-3 flex items-center gap-2">
+            <Clock size={15} className="text-[#E6AF52]" /> Select Focus Time
+          </h3>
+          <div className="flex justify-between gap-2.5">
+            {[15, 30, 45].map((m) => (
+              <button
+                key={m}
+                onClick={() => startFocus(m)}
+                className="flex-1 nordic-btn font-bold py-3 landscape:py-2.5 text-lg tracking-wide active:scale-95"
+              >
+                {m}<span className="text-xs font-normal text-[#B8CEDD] ml-0.5">m</span>
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <button
+            onClick={() => setMode(AppMode.COLLECTION)}
+            className="nordic-panel p-3.5 landscape:p-3 flex items-center gap-3 hover:bg-[#1A3B56]/90 transition active:scale-[0.98] text-left"
+          >
+            <div className="p-2 rounded-lg bg-[#F4EDE0]/10 border border-[#F4EDE0]/20">
+              <BookOpen className="text-[#E6AF52]" size={19} />
+            </div>
+            <div>
+              <div className="font-bold text-[#F4EDE0] text-sm leading-tight">FishDex</div>
+              <div className="text-[11px] text-[#9CB6C9]">{collection.length}/{FISH_DB.length} logged</div>
+            </div>
+          </button>
+
+          <button
+            onClick={async () => {
+              if (!permissionGranted && !isDesktop) {
+                await requestPermission();
+              }
+              setMode(AppMode.ZEN);
+            }}
+            className="nordic-panel p-3.5 landscape:p-3 flex items-center gap-3 hover:bg-[#1A3B56]/90 transition active:scale-[0.98] text-left"
+          >
+            <div className="p-2 rounded-lg bg-[#F4EDE0]/10 border border-[#F4EDE0]/20">
+              <Flower className="text-[#88C4B8]" size={19} />
+            </div>
+            <div>
+              <div className="font-bold text-[#F4EDE0] text-sm leading-tight">Zen Mode</div>
+              <div className="text-[11px] text-[#9CB6C9]">Sea &amp; storm</div>
+            </div>
+          </button>
+        </div>
+
+        {/* Weather Sync & Sea Mood Card */}
+        <div className="nordic-panel p-3.5 landscape:p-3 space-y-2.5 w-full">
+          <div className="grid grid-cols-4 gap-1.5">
+            {[
+              { id: 'SUNNY' as const, label: 'Calm', active: !weatherEnabled && atmosphere.type === WeatherType.SUNNY && atmosphere.localHour < 17 },
+              { id: 'RAINY' as const, label: 'Rain', active: !weatherEnabled && atmosphere.type === WeatherType.RAINY },
+              { id: 'STORM' as const, label: 'Storm', active: !weatherEnabled && atmosphere.type === WeatherType.STORM },
+              { id: 'DUSK' as const, label: 'Dusk', active: !weatherEnabled && atmosphere.type === WeatherType.SUNNY && atmosphere.localHour >= 17 },
+            ].map((p) => (
+              <button
+                key={p.id}
+                onClick={() => applySeaPreset(p.id)}
+                className={`py-1.5 rounded-md text-[11px] font-bold tracking-wide transition border ${
+                  p.active
+                    ? 'bg-[#E6AF52]/25 border-[#E6AF52] text-[#FBE29A]'
+                    : 'bg-[#F4EDE0]/5 border-[#F4EDE0]/15 text-[#B8CEDD] hover:bg-[#F4EDE0]/12'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+
+          {!weatherEnabled ? (
+            <button
+              onClick={handleEnableWeather}
+              className="w-full pt-2 border-t border-[#F4EDE0]/15 flex items-center justify-between group text-left transition"
+            >
+              <div className="flex flex-col">
+                <span className="font-bold text-xs text-[#F4EDE0] group-hover:text-[#FBE29A] transition">
+                  Sync Real Weather
+                </span>
+                <span className="text-[10px] text-[#9CB6C9]">Live local wind, rain &amp; daylight</span>
+              </div>
+              <div className="p-1.5 rounded-md bg-[#F4EDE0]/10 border border-[#F4EDE0]/20 text-[#9CC7E4] group-hover:text-[#F4EDE0] transition">
+                <CloudRain size={15} />
+              </div>
+            </button>
+          ) : (
+            <div className="w-full pt-2 border-t border-[#F4EDE0]/15 flex items-center gap-2.5">
+              <div className="p-1.5 rounded-md bg-[#88C4B8]/20 border border-[#88C4B8]/40 text-[#9AD6CA]">
+                <MapPin size={14} />
+              </div>
+              <div className="flex flex-col text-left overflow-hidden">
+                <span className="font-bold text-xs text-[#F4EDE0] whitespace-nowrap">Ocean Synced</span>
+                <span className="text-[10px] text-[#9CB6C9] truncate">{locationName}</span>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Main Controls Center */}
-      <div className="flex flex-col gap-6 w-full max-w-md landscape:w-96 landscape:flex-1 landscape:pr-8 landscape:justify-center">
-        
-                <div className="bg-white p-6 landscape:p-5 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 transform rotate-1 shadow-xl">
-                    <h3 className="text-xl landscape:text-lg font-bold text-slate-700 mb-4 landscape:mb-2 font-hand flex items-center gap-2">
-                        <Clock size={20} /> Select Focus Time
-                    </h3>
-                    <div className="flex justify-between gap-2">
-                        {/* 1m OPTION REMOVED */}
-                        {[15, 30, 45].map(m => (
-                            <button key={m} onClick={() => startFocus(m)} 
-                                className="flex-1 bg-sky-100 hover:bg-sky-200 text-sky-700 font-bold py-4 landscape:py-3 rounded-xl border-2 border-sky-200 transition active:scale-95 font-hand text-2xl landscape:text-xl">
-                                {m}m
-                            </button>
-                        ))}
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                    <button onClick={() => setMode(AppMode.COLLECTION)} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition -rotate-1 shadow-md">
-                        <BookOpen className="text-orange-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">FishDex</span>
-                    </button>
-                    <button onClick={async () => {
-                        // 请求陀螺仪权限（iOS/Android）
-                        if (!permissionGranted && !isDesktop) {
-                            await requestPermission();
-                        }
-                        setMode(AppMode.ZEN);
-                    }} 
-                        className="bg-white p-4 landscape:p-3 rounded-2xl shadow-[4px_4px_0px_rgba(0,0,0,0.1)] border-2 border-black/10 flex flex-col items-center justify-center gap-2 hover:bg-slate-50 transition rotate-1 shadow-md">
-                        <Flower className="text-emerald-500" size={32} />
-                        <span className="font-bold text-slate-600 font-hand text-xl landscape:text-lg">Zen Mode</span>
-                    </button>
-                </div>
-                
-                 {/* Weather Sync Button (Integrated into Right Column for Landscape) */}
-                <div className="w-full">
-                    {!weatherEnabled ? (
-                        <button 
-                            onClick={handleEnableWeather}
-                            className="w-full bg-indigo-50/80 hover:bg-indigo-100 backdrop-blur-sm border-2 border-indigo-200 text-indigo-700 p-4 landscape:p-3 rounded-2xl flex items-center justify-between group transition-all"
-                        >
-                            <div className="flex flex-col text-left">
-                                <span className="font-bold font-hand text-lg landscape:text-base">Sync Weather</span>
-                                <span className="text-xs text-indigo-400 font-sans hidden sm:block">Real-time effects</span>
-                            </div>
-                            <div className="bg-indigo-200 p-2 rounded-full text-indigo-700 group-hover:scale-110 transition">
-                                <CloudRain size={20} />
-                            </div>
-                        </button>
-                    ) : (
-                        <div className="w-full bg-emerald-50/80 backdrop-blur-sm border-2 border-emerald-200 text-emerald-700 p-4 landscape:p-3 rounded-2xl flex items-center gap-3">
-                            <div className="bg-emerald-200 p-2 rounded-full">
-                                <MapPin size={18} />
-                            </div>
-                            <div className="flex flex-col text-left overflow-hidden">
-                                <span className="font-bold font-hand text-lg landscape:text-base whitespace-nowrap">Ocean Synced</span>
-                                <span className="text-xs text-emerald-500 font-sans truncate">{locationName}</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-      </div>
-      
-      {/* Spacer for portrait bottom area */}
-      <div className="landscape:hidden h-8"></div>
+      <div className="landscape:hidden h-4"></div>
     </div>
   );
 
   const renderFocusing = () => (
     <>
-       {/* Minimal HUD Card (Spliced Style) */}
-       <div 
-         className="absolute top-8 right-8 z-40 pointer-events-auto flex flex-col animate-fade-in rounded-3xl w-56"
-         style={{ boxShadow: '4px 4px 0px rgba(0,0,0,0.1)' }}
-       >
-           {/* Top Section: Time */}
-           <div className="bg-white/95 backdrop-blur-md pt-5 pb-3 rounded-t-3xl border-2 border-b-0 border-slate-200 flex flex-col items-center w-full">
-               <span className="text-6xl font-hand font-bold text-slate-700 tracking-wider tabular-nums leading-none mb-1">
-                 {formatTime(timeLeft)}
-               </span>
-               <div className="flex items-center gap-1.5 text-slate-400 font-bold text-xs uppercase tracking-widest font-hand">
-                    <Clock size={12} /> {currentTime}
-               </div>
-           </div>
-           
-           {/* Bottom Section: Stop Button (Spliced) */}
-           <button 
-             onClick={() => setShowQuitConfirm(true)}
-             className="w-full bg-red-50 hover:bg-red-100 text-red-500 py-3 rounded-b-3xl font-bold font-hand text-lg transition border-2 border-t border-red-100 flex items-center justify-center gap-2 active:bg-red-200 group"
-           >
-             <LogOut size={18} className="group-hover:-translate-x-1 transition-transform"/> Stop
-           </button>
-       </div>
+      {/* Minimalist Nordic Slate HUD */}
+      <div className="absolute top-6 right-6 z-40 pointer-events-auto flex flex-col animate-fade-in nordic-panel overflow-hidden w-48">
+        <div className="pt-4 pb-3 flex flex-col items-center w-full">
+          <span className="text-4xl font-bold text-[#F4EDE0] tracking-wider tabular-nums leading-none mb-1.5">
+            {formatTime(timeLeft)}
+          </span>
+          <div className="flex items-center gap-1.5 text-[#9CB6C9] text-[11px] uppercase tracking-widest">
+            <Clock size={11} /> {currentTime}
+          </div>
+        </div>
 
-       {/* Quit Confirmation Modal */}
-       {showQuitConfirm && (
-        <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in pointer-events-auto">
-          <div className="bg-white/95 backdrop-blur-md rounded-3xl p-8 max-w-sm w-full shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center border-2 border-white/50">
-            
-            <div className="bg-orange-100 p-4 rounded-full text-orange-500 mb-4 shadow-sm transform -rotate-3">
-                <Anchor size={40} />
-            </div>
-            
-            <h2 className="text-3xl font-black text-slate-800 font-hand mb-2">Reel in the line?</h2>
+        <button
+          onClick={() => setShowQuitConfirm(true)}
+          className="w-full bg-[#C8533E]/20 hover:bg-[#C8533E]/35 text-[#F2B8AD] py-2 text-xs uppercase tracking-widest font-bold transition border-t border-[#F4EDE0]/20 flex items-center justify-center gap-1.5"
+        >
+          <LogOut size={13} /> Stop Voyage
+        </button>
+      </div>
 
-            <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-center w-full mb-6">
-                <p className="font-hand text-lg text-slate-600 leading-snug">
-                    If you stop now, the fish will get away!
-                </p>
+      {/* Quit Confirmation Modal */}
+      {showQuitConfirm && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0B1928]/55 backdrop-blur-sm p-4 animate-fade-in pointer-events-auto">
+          <div className="nordic-panel p-6 max-w-sm w-full text-center flex flex-col items-center">
+            <div className="bg-[#E6AF52]/15 p-3 rounded-full border border-[#E6AF52]/40 text-[#E6AF52] mb-3">
+              <Anchor size={26} />
             </div>
 
-            <div className="flex gap-3 w-full">
-                <button onClick={() => setShowQuitConfirm(false)} 
-                    className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold py-3 rounded-xl font-hand text-lg border-2 border-slate-200 transition active:scale-95">
-                    Wait
-                </button>
-                <button onClick={handleQuit} 
-                    className="flex-1 bg-red-500 hover:bg-red-600 text-white font-bold py-3 rounded-xl font-hand text-lg shadow-lg border-b-4 border-red-700 active:border-b-0 active:translate-y-1 transition-all">
-                    Give Up
-                </button>
+            <h2 className="text-xl font-bold text-[#F4EDE0] mb-1.5">Reel in the line?</h2>
+            <p className="text-sm text-[#A9C1D4] mb-5 leading-relaxed">
+              If you head back to port now, the catch will slip back into the deep.
+            </p>
+
+            <div className="flex gap-2.5 w-full">
+              <button
+                onClick={() => setShowQuitConfirm(false)}
+                className="flex-1 nordic-btn font-bold py-2.5 text-sm"
+              >
+                Stay at Sea
+              </button>
+              <button
+                onClick={handleQuit}
+                className="flex-1 bg-[#B84A39] hover:bg-[#C95543] text-[#F4EDE0] font-bold py-2.5 rounded-[9px] text-sm border border-[#F4EDE0]/25 transition"
+              >
+                Give Up
+              </button>
             </div>
           </div>
         </div>
-       )}
+      )}
     </>
   );
 
   const renderReward = () => (
-    <div className="absolute inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 overflow-y-auto">
-      <div className="bg-white/95 backdrop-blur-md rounded-3xl p-6 w-80 shadow-2xl text-center relative crayon-box animate-bounce-in flex flex-col items-center">
-        
-        <div className="text-6xl filter drop-shadow-xl mb-4 transform hover:scale-110 transition cursor-pointer">
-            {caughtFish?.icon}
-        </div>
-        
-        <h2 className="text-3xl font-black text-slate-800 font-hand mb-2">{caughtFish?.name}</h2>
-        <div className="inline-block px-4 py-1 bg-sky-100 text-sky-600 rounded-full text-xs font-bold font-hand uppercase tracking-widest border border-sky-200 mb-4">
-            {caughtFish?.rarity}
+    <div className="absolute inset-0 z-50 flex items-center justify-center bg-[#0B1928]/55 backdrop-blur-sm p-4 overflow-y-auto pointer-events-auto">
+      <div className="nordic-panel p-6 w-80 text-center flex flex-col items-center animate-bounce-in">
+        <div className="mb-3.5 px-6 py-4 rounded-xl bg-[#0F2438]/65 border border-[#F4EDE0]/15 w-full flex justify-center">
+          {caughtFish?.spriteUrl ? (
+            <img src={caughtFish.spriteUrl} alt={caughtFish.name} className="w-28 h-16 object-contain" />
+          ) : (
+            <span className="text-5xl">{caughtFish?.icon}</span>
+          )}
         </div>
 
-        <div className="bg-slate-50 p-4 rounded-2xl border-2 border-slate-100 text-left relative w-full">
-            <div className="absolute -top-3 -left-2 bg-yellow-200 w-8 h-8 rounded-full opacity-50"></div>
-            <p className="font-hand text-base text-slate-600 relative z-10 leading-relaxed italic">
-                {loadingLore ? "The fisherman is writing in his journal..." : `"${lore}"`}
-            </p>
+        <h2 className="text-2xl font-bold text-[#F4EDE0] mb-1">{caughtFish?.name}</h2>
+        <div className="inline-block px-3 py-0.5 bg-[#E6AF52]/20 text-[#F4CF82] rounded-full text-[10px] font-bold uppercase tracking-[0.18em] border border-[#E6AF52]/40 mb-4">
+          {caughtFish?.rarity}
         </div>
 
-        <button onClick={() => setMode(AppMode.MENU)} 
-            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold py-3 rounded-2xl font-hand text-lg shadow-lg border-b-4 border-sky-700 active:border-b-0 active:translate-y-1 transition-all mt-6">
-            Awesome!
+        <div className="bg-[#0F2438]/55 p-3.5 rounded-xl border border-[#F4EDE0]/15 text-left w-full">
+          <p className="text-sm text-[#D6E3EC] leading-relaxed italic">
+            {loadingLore ? 'The fisherman is writing in his logbook...' : `"${lore}"`}
+          </p>
+        </div>
+
+        <button
+          onClick={() => setMode(AppMode.MENU)}
+          className="w-full nordic-btn-primary font-bold py-2.5 text-sm tracking-wide mt-5"
+        >
+          Keep in Logbook
         </button>
-
       </div>
     </div>
   );
 
   const renderCollection = () => (
-    <div className="absolute inset-0 z-50 bg-slate-50 overflow-y-auto pointer-events-auto">
-        <div className="p-6 pb-24 max-w-3xl mx-auto">
-            <div className="flex justify-between items-center mb-8 sticky top-0 bg-slate-50/90 backdrop-blur py-4 z-10">
-                <h2 className="text-4xl font-bold text-slate-800 font-hand">My FishDex</h2>
-                <button onClick={() => setMode(AppMode.MENU)} className="p-2 bg-white rounded-full shadow border hover:bg-gray-100">
-                    <X size={24} />
-                </button>
-            </div>
-            
-            <div className="grid grid-cols-2 sm:grid-cols-3 landscape:grid-cols-4 gap-4">
-                {FISH_DB.map(fish => {
-                    const caught = collection.includes(fish.id);
-                    return (
-                        <div key={fish.id} className={`aspect-square rounded-3xl flex flex-col items-center justify-center p-4 text-center border-2 transition-all relative overflow-hidden
-                            ${caught ? 'bg-white border-slate-200 shadow-sm crayon-box' : 'bg-slate-100 border-dashed border-slate-300'}`}>
-                            
-                            {caught ? (
-                                <>
-                                    <div className="text-5xl mb-2 transform transition hover:scale-110 cursor-pointer">{fish.icon}</div>
-                                    <p className="font-hand font-bold text-lg text-slate-700 leading-none">{fish.name}</p>
-                                    <span className="text-[10px] uppercase font-bold text-slate-400 mt-2 tracking-widest">{fish.rarity}</span>
-                                </>
-                            ) : (
-                                <span className="text-4xl opacity-20 grayscale">{fish.icon}</span>
-                            )}
-                        </div>
-                    );
-                })}
-            </div>
+    <div className="absolute inset-0 z-50 bg-[#142C42]/95 backdrop-blur-md overflow-y-auto pointer-events-auto text-[#F4EDE0]">
+      <div className="p-6 pb-20 max-w-3xl mx-auto">
+        <div className="flex justify-between items-center mb-6 sticky top-0 bg-[#142C42]/95 backdrop-blur py-3 z-10 border-b border-[#F4EDE0]/20">
+          <div>
+            <h2 className="text-2xl font-bold text-[#F4EDE0] tracking-wide">My FishDex</h2>
+            <p className="text-xs text-[#9CB6C9] tracking-wider uppercase mt-0.5">
+              Coastal Logbook · {collection.length} / {FISH_DB.length}
+            </p>
+          </div>
+          <button onClick={() => setMode(AppMode.MENU)} className="p-2 nordic-btn">
+            <X size={20} />
+          </button>
         </div>
+
+        <div className="grid grid-cols-2 sm:grid-cols-3 landscape:grid-cols-4 gap-3.5">
+          {FISH_DB.map((fish) => {
+            const caught = collection.includes(fish.id);
+            return (
+              <div
+                key={fish.id}
+                className={`aspect-square rounded-xl flex flex-col items-center justify-center p-4 text-center transition-all relative overflow-hidden ${
+                  caught
+                    ? 'nordic-panel bg-[#1B3A56]/80'
+                    : 'bg-[#0F2234]/55 border border-dashed border-[#F4EDE0]/18'
+                }`}
+              >
+                {caught ? (
+                  <>
+                    <img
+                      src={fish.spriteUrl}
+                      alt={fish.name}
+                      className="w-24 h-14 object-contain mb-2.5 transition hover:scale-105"
+                    />
+                    <p className="font-bold text-sm text-[#F4EDE0] leading-tight">{fish.name}</p>
+                    <span className="text-[10px] uppercase font-bold text-[#E6AF52] mt-1 tracking-widest">
+                      {fish.rarity}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <img
+                      src={fish.spriteUrl}
+                      alt="Unknown"
+                      className="w-20 h-12 object-contain opacity-15 brightness-0 invert"
+                    />
+                    <span className="text-[11px] text-[#7391A8] mt-2 tracking-widest">UNSEEN</span>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 
   const renderZen = () => (
-      <div className="absolute inset-0 pointer-events-none z-40 flex flex-col justify-end items-center pb-8 transition-all">
-          {zenPanelOpen ? (
-            <div className="bg-white/95 backdrop-blur-md p-6 rounded-3xl shadow-2xl border-2 border-slate-200 pointer-events-auto w-full max-w-lg mx-4 crayon-box animate-bounce-in absolute bottom-8">
-                  <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
-                      <h3 className="font-hand font-bold text-2xl text-slate-700 flex items-center gap-2">
-                          <Settings className="text-slate-400" size={24}/>
-                          Environment Control
-                      </h3>
-                      <button onClick={() => setZenPanelOpen(false)} className="p-2 bg-slate-100 rounded-full hover:bg-slate-200 text-slate-500 transition">
-                         <ChevronDown size={24} />
-                     </button>
-                  </div>
+    <div className="absolute inset-0 pointer-events-none z-40 flex flex-col justify-end items-center pb-6 transition-all">
+      {zenPanelOpen ? (
+        <div className="nordic-panel p-5 pointer-events-auto w-full max-w-lg mx-4 animate-bounce-in absolute bottom-6">
+          <div className="flex justify-between items-center mb-4 border-b border-[#F4EDE0]/15 pb-3">
+            <h3 className="font-bold text-base tracking-wide text-[#F4EDE0] flex items-center gap-2">
+              <Settings className="text-[#E6AF52]" size={18} />
+              Environment Control
+            </h3>
+            <button
+              onClick={() => setZenPanelOpen(false)}
+              className="p-1.5 nordic-btn rounded-full"
+            >
+              <ChevronDown size={18} />
+            </button>
+          </div>
 
-                  {/* Controls Grid */}
-                  <div className="space-y-6">
-                      
-                      {/* Time Slider */}
-                      <div className="space-y-2">
-                          <div className="flex justify-between font-hand font-bold text-slate-600">
-                              <span>Time of Day</span>
-                              <span>{debugHour.toFixed(1)} h</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="0" max="24" step="0.1" 
-                            value={debugHour}
-                            onChange={(e) => setDebugHour(parseFloat(e.target.value))}
-                            className="w-full h-3 bg-gradient-to-r from-slate-900 via-sky-400 to-slate-900 rounded-lg appearance-none cursor-pointer"
-                          />
-                      </div>
-
-                       {/* Wind Slider */}
-                       <div className="space-y-2">
-                          <div className="flex justify-between font-hand font-bold text-slate-600">
-                              <span>Wind Speed</span>
-                              <span>{debugWind} km/h</span>
-                          </div>
-                          <input 
-                            type="range" 
-                            min="0" max="50" step="1" 
-                            value={debugWind}
-                            onChange={(e) => setDebugWind(parseInt(e.target.value))}
-                            className="w-full h-3 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-teal-500"
-                          />
-                      </div>
-
-                      {/* Weather Type */}
-                      <div className="grid grid-cols-5 gap-2">
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.SUNNY)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.SUNNY ? 'bg-yellow-100 border-yellow-400 text-yellow-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Sun size={18}/> Sun
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.RAINY)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.RAINY ? 'bg-blue-100 border-blue-400 text-blue-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <CloudDrizzle size={18}/> Rain
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.STORM)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.STORM ? 'bg-slate-200 border-slate-500 text-slate-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <CloudLightning size={18}/> Storm
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.NIGHT)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.NIGHT ? 'bg-indigo-100 border-indigo-400 text-indigo-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Moon size={18}/> Night
-                          </button>
-                          <button 
-                            onClick={() => setDebugWeather(WeatherType.SNOW)}
-                            className={`p-2 rounded-2xl flex flex-col items-center gap-1 transition border-2 font-hand font-bold text-[10px] ${debugWeather === WeatherType.SNOW ? 'bg-cyan-100 border-cyan-400 text-cyan-700' : 'bg-slate-50 border-transparent hover:bg-slate-100'}`}>
-                              <Snowflake size={18}/> Snow
-                          </button>
-                      </div>
-
-                  </div>
+          <div className="space-y-4">
+            {/* Time Slider */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-bold tracking-wider uppercase text-[#B8CEDD]">
+                <span>Time of Day</span>
+                <span className="text-[#F4EDE0]">{debugHour.toFixed(1)} h</span>
               </div>
-          ) : (
-              <div 
-                  className="bg-white/90 backdrop-blur-md px-6 py-4 rounded-full shadow-xl border-2 border-slate-200 pointer-events-auto flex items-center gap-6 cursor-pointer hover:scale-105 transition-all animate-bounce-in absolute bottom-8 crayon-box"
-                  onClick={() => setZenPanelOpen(true)}
-              >
-                  <div className="flex items-center gap-3">
-                     <span className="font-hand font-bold text-slate-700 text-xl">Zen Mode</span>
-                  </div>
-                  
-                  {/* Status Indicators */}
-                  <div className="hidden sm:flex items-center gap-3 text-slate-500 text-sm border-l-2 border-slate-200 pl-6">
-                        <div className="flex items-center gap-1">
-                            {atmosphere.isDay ? <Sun size={16} className="text-orange-400"/> : <Moon size={16} className="text-indigo-400"/>}
-                            <span className="font-bold font-hand">{debugHour.toFixed(1)}h</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                             <Wind size={16} className="text-teal-500"/>
-                             <span className="font-bold font-hand">{debugWind}</span>
-                        </div>
-                  </div>
+              <input
+                type="range"
+                min="0"
+                max="24"
+                step="0.1"
+                value={debugHour}
+                onChange={(e) => setDebugHour(parseFloat(e.target.value))}
+                className="w-full h-2 bg-gradient-to-r from-[#142538] via-[#488EB8] to-[#8C6850] rounded-lg appearance-none cursor-pointer accent-[#FBE29A]"
+              />
+            </div>
 
-                  <div className="flex items-center gap-2 ml-4 border-l-2 border-slate-200 pl-6">
-                      <div className="p-2 bg-sky-100 text-sky-600 rounded-full hover:bg-sky-200 transition">
-                          <Settings size={20} />
-                      </div>
-                      <button 
-                          onClick={(e) => { e.stopPropagation(); setMode(AppMode.MENU); }} 
-                          className="p-2 bg-red-100 text-red-500 rounded-full hover:bg-red-200 transition"
-                      >
-                          <LogOut size={20} />
-                      </button>
-                  </div>
+            {/* Wind Slider */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between text-xs font-bold tracking-wider uppercase text-[#B8CEDD]">
+                <span>Wind Speed</span>
+                <span className="text-[#F4EDE0]">{debugWind} km/h</span>
               </div>
-          )}
-      </div>
+              <input
+                type="range"
+                min="0"
+                max="50"
+                step="1"
+                value={debugWind}
+                onChange={(e) => setDebugWind(parseInt(e.target.value))}
+                className="w-full h-2 bg-[#0F2438] rounded-lg appearance-none cursor-pointer accent-[#7FB0CE]"
+              />
+            </div>
+
+            {/* Weather Type */}
+            <div className="grid grid-cols-5 gap-2">
+              {[
+                { type: WeatherType.SUNNY, label: 'Sun', Icon: Sun },
+                { type: WeatherType.RAINY, label: 'Rain', Icon: CloudDrizzle },
+                { type: WeatherType.STORM, label: 'Storm', Icon: CloudLightning },
+                { type: WeatherType.NIGHT, label: 'Night', Icon: Moon },
+                { type: WeatherType.SNOW, label: 'Snow', Icon: Snowflake },
+              ].map(({ type, label, Icon }) => {
+                const active = debugWeather === type;
+                return (
+                  <button
+                    key={type}
+                    onClick={() => setDebugWeather(type)}
+                    className={`p-2 rounded-lg flex flex-col items-center gap-1 transition border text-[11px] font-bold ${
+                      active
+                        ? 'bg-[#E6AF52]/25 border-[#E6AF52] text-[#FBE29A]'
+                        : 'bg-[#F4EDE0]/5 border-[#F4EDE0]/15 text-[#A9C1D4] hover:bg-[#F4EDE0]/12'
+                    }`}
+                  >
+                    <Icon size={16} /> {label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div
+          className="nordic-panel px-5 py-2.5 rounded-full pointer-events-auto flex items-center gap-5 cursor-pointer hover:bg-[#1B3D5A]/90 transition-all absolute bottom-6"
+          onClick={() => setZenPanelOpen(true)}
+        >
+          <span className="font-bold text-[#F4EDE0] text-sm tracking-wide">Zen Mode</span>
+
+          <div className="hidden sm:flex items-center gap-3 text-[#B8CEDD] text-xs border-l border-[#F4EDE0]/20 pl-4">
+            <div className="flex items-center gap-1.5">
+              {atmosphere.isDay ? (
+                <Sun size={14} className="text-[#FBE29A]" />
+              ) : (
+                <Moon size={14} className="text-[#B8CEDD]" />
+              )}
+              <span className="font-bold">{debugHour.toFixed(1)}h</span>
+            </div>
+            <div className="flex items-center gap-1.5">
+              <Wind size={14} className="text-[#88C4B8]" />
+              <span className="font-bold">{debugWind} km/h</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 border-l border-[#F4EDE0]/20 pl-4">
+            <div className="p-1.5 nordic-btn rounded-full">
+              <Settings size={15} />
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setMode(AppMode.MENU);
+              }}
+              className="p-1.5 bg-[#C8533E]/25 hover:bg-[#C8533E]/45 text-[#F4C2B8] border border-[#C8533E]/40 rounded-full transition"
+            >
+              <LogOut size={15} />
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 
   return (
