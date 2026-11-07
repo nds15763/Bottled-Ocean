@@ -1,4 +1,5 @@
 import { AtmosphereState, ShipState, WeatherType } from '../types';
+import { getMoonPhase } from '../utils/moonPhase';
 
 export const SCENE_WIDTH = 1600;
 export const SCENE_HEIGHT = 900;
@@ -21,6 +22,7 @@ export interface OceanRenderState {
   caughtFishColor?: string | null;
   fishingAnim: FishingVisualState;
   atmosphere: AtmosphereState;
+  date?: Date;
   wavePhase: number;
   lightning: number;
 }
@@ -281,6 +283,91 @@ function wrap(v: number, period: number): number {
   return ((v % period) + period) % period;
 }
 
+function drawMoonByPhase(ctx: CanvasRenderingContext2D, radius: number, phase: number, waxing: boolean, color: string) {
+  const cosPhase = Math.cos(phase * Math.PI * 2);
+  const illumination = (1 - cosPhase) / 2;
+  const terminatorRadius = Math.abs(cosPhase) * radius;
+
+  // Soft atmospheric bloom instead of flat concentric rings.
+  const bloomStrength = 0.032 + illumination * 0.153;
+  const bloom = ctx.createRadialGradient(0, 0, radius * 0.55, 0, 0, radius * 2.9);
+  bloom.addColorStop(0, `rgba(255, 247, 218, ${bloomStrength})`);
+  bloom.addColorStop(0.42, `rgba(242, 233, 205, ${bloomStrength * 0.39})`);
+  bloom.addColorStop(1, 'rgba(242, 233, 205, 0)');
+  ctx.save();
+  ctx.fillStyle = bloom;
+  ctx.beginPath();
+  ctx.arc(0, 0, radius * 2.9, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // Earthshine: the dark side is still readable, but never a flat opaque grey disc.
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(0, 0, radius, 0, Math.PI * 2);
+  ctx.clip();
+  const earthshine = ctx.createRadialGradient(-radius * 0.18, -radius * 0.22, radius * 0.1, 0, 0, radius);
+  earthshine.addColorStop(0, 'rgba(208, 218, 221, 0.18)');
+  earthshine.addColorStop(0.72, 'rgba(156, 177, 187, 0.12)');
+  earthshine.addColorStop(1, 'rgba(92, 121, 139, 0.06)');
+  ctx.fillStyle = earthshine;
+  ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+
+  if (illumination > 0.008) {
+    ctx.beginPath();
+    if (illumination > 0.992) {
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
+    } else {
+      // Lit limb: waxing moon is right-sided, waning moon is left-sided.
+      if (waxing) ctx.arc(0, 0, radius, -Math.PI / 2, Math.PI / 2, false);
+      else ctx.arc(0, 0, radius, -Math.PI / 2, Math.PI / 2, true);
+
+      if (terminatorRadius < 0.5) {
+        ctx.lineTo(0, -radius);
+      } else if (waxing === (cosPhase >= 0)) {
+        // Terminator bulges toward the lit side.
+        ctx.ellipse(0, 0, terminatorRadius, radius, 0, Math.PI / 2, -Math.PI / 2, true);
+      } else {
+        // Terminator bulges across the dark side, producing a gibbous moon.
+        ctx.ellipse(0, 0, terminatorRadius, radius, 0, Math.PI / 2, Math.PI * 1.5, false);
+      }
+      ctx.closePath();
+    }
+
+    const lit = ctx.createRadialGradient(-radius * 0.26, -radius * 0.3, radius * 0.08, 0, 0, radius);
+    lit.addColorStop(0, '#FFF9E8');
+    lit.addColorStop(0.52, color);
+    lit.addColorStop(1, '#D4BF8A');
+    ctx.fillStyle = lit;
+    ctx.fill();
+
+    // Very quiet crater texture; it should read as paper-grain, not a sci-fi moon map.
+    ctx.save();
+    ctx.clip();
+    const craters = [
+      [-0.31, -0.13, 0.13, 0.085],
+      [0.18, 0.25, 0.1, 0.075],
+      [-0.08, 0.47, 0.065, 0.06],
+      [0.38, -0.3, 0.055, 0.05],
+      [0.06, -0.46, 0.045, 0.045],
+    ];
+    ctx.fillStyle = '#A58F63';
+    for (const [x, y, r, a] of craters) {
+      ctx.globalAlpha = a;
+      ctx.beginPath();
+      ctx.arc(x * radius, y * radius, r * radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+const TRAVEL_PIXELS_PER_SECOND = 4;
+function travelOffset(time: number): number {
+  return time * TRAVEL_PIXELS_PER_SECOND;
+}
+
 interface CloudDef {
   x: number;
   y: number;
@@ -306,6 +393,8 @@ export function createNordicOceanRenderer() {
   let ready = false;
   let blendPalette: Palette | null = null;
   let currentChop = 0.14;
+  let nightMoonX = SCENE_WIDTH * 0.56;
+  let nightMoonLight = 1;
 
   // Hand-composed initial cloud layout so top-left title sky opens cleanly
   const clouds: CloudDef[] = [
@@ -491,6 +580,11 @@ export function createNordicOceanRenderer() {
     const h = state.atmosphere.localHour;
     const isNight = state.atmosphere.type === WeatherType.NIGHT || !state.atmosphere.isDay || h >= 20 || h < 5;
     const isDusk = !isNight && ((h >= 17 && h < 20) || (h >= 5 && h < 6.6));
+    const moonPhase = getMoonPhase(state.date ?? new Date());
+    ctx.canvas.dataset.moonPhase = moonPhase.phase.toFixed(4);
+    ctx.canvas.dataset.moonName = moonPhase.name;
+    ctx.canvas.dataset.moonIllumination = moonPhase.illumination.toFixed(3);
+    ctx.canvas.dataset.moonWaxing = String(moonPhase.waxing);
 
     // Pinpoint stars in Night and faint evening stars in Dusk (matching f50_after_rain.png!)
     if (isNight || isDusk) {
@@ -510,38 +604,39 @@ export function createNordicOceanRenderer() {
       ctx.restore();
     }
 
-    // Serene Nordic Sun / Moon with soft concentric translucent halos (NO spiky cartoon rays!)
-    const sunX = isDusk ? SCENE_WIDTH * 0.31 : SCENE_WIDTH * 0.56;
-    const sunY = isDusk ? HORIZON_Y - 82 : SCENE_HEIGHT * 0.24;
+    // Celestial arc follows the local clock so sunrise/sunset and moon phases move across the sky.
+    let celestialHour = h;
+    if (isNight && h >= 6 && h < 19) celestialHour = (h + 12) % 24;
+    const dayProgress = Math.max(0, Math.min(1, (h - 6) / 13));
+    const nightElapsed = celestialHour >= 19 ? celestialHour - 19 : celestialHour + 5;
+    const nightProgress = Math.max(0, Math.min(1, nightElapsed / 10));
+    const arcProgress = isNight ? nightProgress : dayProgress;
+    const sunX = SCENE_WIDTH * (0.10 + arcProgress * 0.80);
+    const sunY = HORIZON_Y - (isNight ? 70 : 55) - Math.sin(arcProgress * Math.PI) * (isNight ? 180 : 220);
+    nightMoonX = sunX;
+    nightMoonLight = moonPhase.illumination;
+    ctx.canvas.dataset.celestialX = sunX.toFixed(1);
+    ctx.canvas.dataset.celestialY = sunY.toFixed(1);
 
     if (pal.stormBankAlpha < 0.92) {
       ctx.save();
       ctx.globalAlpha = Math.max(0, 1 - pal.stormBankAlpha * 0.92);
       ctx.translate(sunX, sunY);
 
-      ctx.fillStyle = pal.sunHalo;
-      ctx.beginPath();
-      ctx.arc(0, 0, 74, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.beginPath();
-      ctx.arc(0, 0, 56, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = pal.sunColor;
       if (isNight) {
-        // Crisp editorial crescent moon with subtle earthshine disc
-        ctx.globalAlpha *= 0.16;
-        ctx.beginPath();
-        ctx.arc(0, 0, 36, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.globalAlpha = Math.max(0, 1 - pal.stormBankAlpha * 0.92);
-        ctx.beginPath();
-        ctx.arc(0, 0, 36, Math.PI * 0.22, Math.PI * 1.48, false);
-        ctx.quadraticCurveTo(-8, -4, 36 * Math.cos(Math.PI * 0.22), 36 * Math.sin(Math.PI * 0.22));
-        ctx.closePath();
-        ctx.fill();
+        // The moon owns its soft bloom; avoid the old two solid concentric rings.
+        drawMoonByPhase(ctx, 36, moonPhase.phase, moonPhase.waxing, pal.sunColor);
       } else {
+        ctx.fillStyle = pal.sunHalo;
+        ctx.beginPath();
+        ctx.arc(0, 0, 74, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.beginPath();
+        ctx.arc(0, 0, 56, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.fillStyle = pal.sunColor;
         ctx.beginPath();
         ctx.arc(0, 0, 39, 0, Math.PI * 2);
         ctx.fill();
@@ -667,15 +762,20 @@ export function createNordicOceanRenderer() {
     for (const c of clouds) {
       const span = SCENE_WIDTH + 480;
       const speed = c.speed + state.atmosphere.windSpeed * 0.25;
-      const cx = wrap(c.x - state.time * speed + 240, span) - 240;
+      const cx = wrap(c.x - state.time * speed - travelOffset(state.time) * 0.25 + 240, span) - 240;
       drawSculpturalCloud(ctx, cx, c.y, c.scale, c.variant, pal.cloudMain, pal.cloudShadow);
     }
     ctx.restore();
 
-    // Minimalist V-wing coastal gulls gliding in the breeze (exact f04_sunny.png style!)
-    const gullCycle = 24;
+    // Gulls enter from beyond the right edge and leave beyond the left edge.
+    // No bird is removed while it is still visible in the middle of the sky.
+    const gullCycle = 36;
     const gt = state.time % gullCycle;
-    if (gt < 14) {
+    const flightDuration = 30;
+    if (gt < flightDuration) {
+      const cycleIndex = Math.floor(state.time / gullCycle);
+      const speed = 55 + (cycleIndex % 3) * 3;
+      const startX = SCENE_WIDTH + 90 + (cycleIndex % 2) * 36;
       ctx.save();
       ctx.strokeStyle = '#F6EFE0';
       ctx.lineWidth = 2.4;
@@ -684,9 +784,11 @@ export function createNordicOceanRenderer() {
       for (let i = 0; i < 2; i++) {
         const tB = gt - i * 0.6;
         if (tB < 0) continue;
-        const bx = SCENE_WIDTH * 0.78 - tB * 58 + i * 38;
-        const by = 165 + i * 24 + Math.sin(tB * 1.7 + i) * 9;
+        const bx = startX - tB * speed + i * 38;
+        if (bx > SCENE_WIDTH + 100) continue;
+        const by = 150 + (cycleIndex % 2) * 34 + i * 24 + Math.sin(tB * 1.7 + i) * 9;
         const flap = Math.sin(tB * 5.2 + i * 1.4) * 5.5;
+        if (i === 0) ctx.canvas.dataset.gullX = bx.toFixed(1);
         ctx.globalAlpha = 0.86;
         ctx.beginPath();
         ctx.moveTo(bx - 13, by - 3 + flap);
@@ -695,6 +797,8 @@ export function createNordicOceanRenderer() {
         ctx.stroke();
       }
       ctx.restore();
+    } else {
+      ctx.canvas.dataset.gullX = 'offscreen';
     }
   }
 
@@ -744,7 +848,7 @@ export function createNordicOceanRenderer() {
     state: OceanRenderState
   ) {
     // 1. Far right misty sea-cliff headlands (exact f15_wind_rain.png & crop_wind_sea.png right horizon!)
-    const farShift = 1090 + Math.sin(state.time * 0.025) * 18;
+    const farShift = wrap(1090 - travelOffset(state.time) * 0.55, SCENE_WIDTH + 800);
     ctx.save();
     ctx.globalAlpha = 0.42;
     ctx.fillStyle = pal.cliffDark;
@@ -771,12 +875,13 @@ export function createNordicOceanRenderer() {
     ctx.restore();
 
     // 2. Signature Faceted Lighthouse Cliff Island (anchored gently in left horizon parallax like f04 & f34!)
-    const ix = 138 + Math.sin(state.time * 0.032) * 22;
+    const ix = wrap(138 - travelOffset(state.time) * 0.85, SCENE_WIDTH + 800);
     const iy = HORIZON_Y + 4;
+    ctx.canvas.dataset.islandX = ix.toFixed(2);
+    ctx.canvas.dataset.sceneTime = state.time.toFixed(2);
 
     ctx.save();
     ctx.translate(ix, iy);
-
     // Subtle outlying dark skerry rocks on far left of island (f04_sunny.png!)
     ctx.fillStyle = pal.cliffDark;
     ctx.globalAlpha = 0.72;
@@ -1011,6 +1116,62 @@ export function createNordicOceanRenderer() {
   }
 
   // --- MULTI-ROW SCALLOPED CUSP SEA RENDERER (Exact f04 Calm + crop_wind_sea + crop_storm_sea!) ---
+  function drawCelestialWaterShimmer(ctx: CanvasRenderingContext2D, state: OceanRenderState) {
+    const h = state.atmosphere.localHour;
+    const isNight = state.atmosphere.type === WeatherType.NIGHT || !state.atmosphere.isDay || h >= 20 || h < 5;
+    const isDusk =
+      !isNight &&
+      state.atmosphere.type !== WeatherType.STORM &&
+      state.atmosphere.type !== WeatherType.RAINY &&
+      ((h >= 17 && h < 20) || (h >= 5 && h < 6.6));
+    if (!isNight && !isDusk) return;
+
+    const shimmerX = isNight ? nightMoonX : SCENE_WIDTH * 0.31;
+    const lightFactor = isNight ? Math.pow(Math.max(0, nightMoonLight), 0.62) : 1;
+    if (lightFactor < 0.03) return;
+    ctx.save();
+
+    // A very soft column of light, wider as it approaches the viewer.
+    const wash = ctx.createLinearGradient(0, HORIZON_Y, 0, HORIZON_Y + 250);
+    wash.addColorStop(0, isDusk ? 'rgba(252, 230, 178, 0.13)' : `rgba(226, 235, 228, ${0.09 * lightFactor})`);
+    wash.addColorStop(0.55, isDusk ? 'rgba(252, 230, 178, 0.045)' : `rgba(226, 235, 228, ${0.03 * lightFactor})`);
+    wash.addColorStop(1, 'rgba(226, 235, 228, 0)');
+    ctx.fillStyle = wash;
+    ctx.beginPath();
+    ctx.moveTo(shimmerX - 25, HORIZON_Y);
+    ctx.lineTo(shimmerX + 25, HORIZON_Y);
+    ctx.lineTo(shimmerX + 105, HORIZON_Y + 250);
+    ctx.lineTo(shimmerX - 105, HORIZON_Y + 250);
+    ctx.closePath();
+    ctx.fill();
+
+    ctx.strokeStyle = isDusk ? '#FCE6B2' : '#E8E4CE';
+    ctx.lineCap = 'round';
+    for (let s = 0; s < 19; s++) {
+      const depth = s / 18;
+      const sy = HORIZON_Y + 7 + Math.pow(depth, 1.22) * 238;
+      const spread = 6 + depth * 54;
+      const drift = Math.sin(state.time * 1.6 + s * 1.37) * (2 + depth * 5);
+      const lanes = s % 4 === 0 ? 2 : 1;
+
+      for (let lane = 0; lane < lanes; lane++) {
+        if ((s + lane * 2) % 7 === 0) continue;
+        const offset = lanes === 1
+          ? Math.sin(s * 2.7) * spread * 0.42
+          : (lane === 0 ? -1 : 1) * spread * (0.45 + (s % 3) * 0.13);
+        const halfW = (5 + depth * 18) * (0.55 + Math.abs(Math.sin(s * 1.83 + lane)) * 0.6);
+        const alpha = (isDusk ? 0.32 : 0.24) * lightFactor * (1 - depth * 0.62);
+        ctx.globalAlpha = Math.max(0.035, alpha * (0.72 + 0.28 * Math.sin(state.time * 2.2 + s)));
+        ctx.lineWidth = 1.1 + depth * 0.6;
+        ctx.beginPath();
+        ctx.moveTo(shimmerX + offset + drift - halfW, sy);
+        ctx.lineTo(shimmerX + offset + drift + halfW, sy);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
+  }
+
   function drawWaveRowsRange(
     ctx: CanvasRenderingContext2D,
     fromRow: number,
@@ -1020,7 +1181,10 @@ export function createNordicOceanRenderer() {
   ) {
     const stepX = 6; // High horizontal resolution so every cusp crest is razor-clean and silky!
     if (currentChop < 0.30) {
-      if (fromRow === 0) drawCalmSeaBand(ctx, pal, state.time);
+      if (fromRow === 0) {
+        drawCalmSeaBand(ctx, pal, state.time);
+        drawCelestialWaterShimmer(ctx, state);
+      }
       return;
     }
 
@@ -1168,34 +1332,8 @@ export function createNordicOceanRenderer() {
       }
     }
 
-    // Golden Dusk OR Silver Moonlight Water Shimmer Column (exact f50_after_rain.png!)
-    const h = state.atmosphere.localHour;
-    const isNight =
-      state.atmosphere.type === WeatherType.NIGHT || !state.atmosphere.isDay || h >= 20 || h < 5;
-    const isDusk =
-      !isNight &&
-      state.atmosphere.type !== WeatherType.STORM &&
-      state.atmosphere.type !== WeatherType.RAINY &&
-      ((h >= 17 && h < 20) || (h >= 5 && h < 6.6));
-    if ((isDusk || isNight) && fromRow === 0) {
-      const shimmerX = isDusk ? SCENE_WIDTH * 0.31 : SCENE_WIDTH * 0.56;
-      ctx.save();
-      ctx.strokeStyle = isDusk ? '#FCE6B2' : '#E8E4CE';
-      ctx.lineCap = 'round';
-      for (let s = 0; s < 16; s++) {
-        const sy = HORIZON_Y + 8 + s * 11;
-        const halfW = (6 + s * 1.8) * (0.75 + 0.25 * Math.sin(state.time * 2.4 + s));
-        const drift = Math.sin(state.time * 1.9 + s * 1.3) * 5;
-        const maxA = isDusk ? 0.38 : 0.24;
-        ctx.globalAlpha = Math.max(0.05, maxA - s * 0.015);
-        ctx.lineWidth = 1.4;
-        ctx.beginPath();
-        ctx.moveTo(shimmerX + drift - halfW, sy);
-        ctx.lineTo(shimmerX + drift + halfW, sy);
-        ctx.stroke();
-      }
-      ctx.restore();
-    }
+    // Golden dusk or silver moonlight water shimmer, aligned beneath the real moon.
+    if (fromRow === 0) drawCelestialWaterShimmer(ctx, state);
   }
 
   // --- ARCHITECTURAL NORDIC FISHING TRAWLER & FISHERMAN (Inspired by crop_boat_lighthouse.png & f04!) ---

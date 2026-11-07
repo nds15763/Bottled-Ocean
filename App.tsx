@@ -5,7 +5,13 @@ import { generateFishLore } from './services/geminiService';
 import { fetchLocalWeather } from './services/weatherService';
 import { AppMode, WeatherType, Fish, AtmosphereState } from './types';
 import { FISH_DB, getRandomFish } from './utils/gameData';
-import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake, Flower } from 'lucide-react';
+import { getMoonPhase } from './utils/moonPhase';
+import { Clock, BookOpen, Settings, ChevronDown, LogOut, X, MapPin, CloudRain, Wind, Thermometer, Anchor, Sun, Moon, CloudDrizzle, CloudLightning, Snowflake, Flower, CalendarDays } from 'lucide-react';
+
+function localDateInputValue(date = new Date()) {
+  const local = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
+  return local.toISOString().slice(0, 10);
+}
 
 const App: React.FC = () => {
   const { orientation, requestPermission, permissionGranted, isDesktop } = useDeviceOrientation();
@@ -35,6 +41,7 @@ const App: React.FC = () => {
   
   // Debug / Zen State
   const [debugHour, setDebugHour] = useState(12);
+  const [debugDate, setDebugDate] = useState(localDateInputValue);
   const [debugWind, setDebugWind] = useState(1); // Default to 1
   const [debugWeather, setDebugWeather] = useState<WeatherType>(WeatherType.SUNNY);
   const [zenPanelOpen, setZenPanelOpen] = useState(false);
@@ -343,6 +350,8 @@ const App: React.FC = () => {
     }
   };
 
+  const selectedMoonPhase = getMoonPhase(new Date(`${debugDate}T12:00:00`));
+
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
     const sec = s % 60;
@@ -639,6 +648,24 @@ const App: React.FC = () => {
           </div>
 
           <div className="space-y-4">
+            {/* Calendar date for lunar phase debugging */}
+            <div className="space-y-1.5">
+              <div className="flex justify-between items-center text-xs font-bold tracking-wider uppercase text-[#B8CEDD]">
+                <span>Date</span>
+                <span className="text-[#F4EDE0]/80 normal-case tracking-normal">{selectedMoonPhase.name} · {Math.round(selectedMoonPhase.illumination * 100)}%</span>
+              </div>
+              <div className="relative">
+                <CalendarDays size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-[#E6AF52] pointer-events-none" />
+                <input
+                  type="date"
+                  value={debugDate}
+                  onChange={(e) => setDebugDate(e.target.value)}
+                  className="w-full bg-[#0F2438] border border-[#F4EDE0]/15 rounded-lg pl-10 pr-3 py-2 text-sm text-[#F4EDE0] outline-none focus:border-[#E6AF52]"
+                  style={{ colorScheme: 'dark' }}
+                />
+              </div>
+            </div>
+
             {/* Time Slider */}
             <div className="space-y-1.5">
               <div className="flex justify-between text-xs font-bold tracking-wider uppercase text-[#B8CEDD]">
@@ -748,6 +775,7 @@ const App: React.FC = () => {
       <SimulationCanvas 
          tilt={orientation.tilt} 
          atmosphere={atmosphere}
+         date={new Date(`${debugDate}T12:00:00`)}
          isFishing={mode === AppMode.FOCUSING} 
          caughtFishColor={mode === AppMode.REWARD ? caughtFish?.color : null}
       />

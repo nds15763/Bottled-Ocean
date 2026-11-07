@@ -13,6 +13,7 @@ interface SimulationCanvasProps {
   atmosphere: AtmosphereState;
   isFishing: boolean;
   caughtFishColor?: string | null;
+  date?: Date;
 }
 
 const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
@@ -20,13 +21,14 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
   atmosphere,
   isFishing,
   caughtFishColor,
+  date,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const rendererRef = useRef(createNordicOceanRenderer());
   const readyRef = useRef(false);
-  const latestRef = useRef({ tilt, atmosphere, isFishing, caughtFishColor });
-  latestRef.current = { tilt, atmosphere, isFishing, caughtFishColor };
+  const latestRef = useRef({ tilt, atmosphere, isFishing, caughtFishColor, date });
+  latestRef.current = { tilt, atmosphere, isFishing, caughtFishColor, date };
 
   const shipRef = useRef<ShipState & { targetAngle: number }>({
     x: SCENE_WIDTH * 0.44,
@@ -265,11 +267,13 @@ const SimulationCanvas: React.FC<SimulationCanvasProps> = ({
         caughtFishColor: fishColor,
         fishingAnim: anim,
         atmosphere: currentAtmosphere,
+        date: latestRef.current.date,
         wavePhase,
         lightning: lightningRef.current,
       });
 
       if (++frameCount % 2 === 0) {
+        canvas.dataset.travel = t.toFixed(1);
         canvas.dataset.shipX = ship.x.toFixed(1);
         canvas.dataset.shipY = ship.y.toFixed(1);
         canvas.dataset.shipAngle = ship.angle.toFixed(4);
