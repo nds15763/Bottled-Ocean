@@ -431,14 +431,14 @@ export function createNordicOceanRenderer() {
     const base = rowBaseY(row);
 
     // Tight horizon chop (~84px) expanding to sculptural foreground swells (~208px)
-    const wavelength = 84 + u * 124;
+    const wavelength = (84 + u * 124) * (0.82 + (row % 3) * 0.14);
     const k1 = (Math.PI * 2) / wavelength;
     const k2 = k1 * 0.61;
     const speed = 0.78 + u * 0.62;
 
     // Half-cycle row stagger (row * 2.85) interlocks crests into the troughs behind them!
-    const ph1 = wavePhase * speed + row * 2.85;
-    const ph2 = -wavePhase * speed * 0.54 + row * 1.93;
+    const ph1 = wavePhase * speed + row * 2.85 + Math.sin(row * 1.73) * 1.0;
+    const ph2 = -wavePhase * speed * 0.54 + row * 1.93 + Math.cos(row * 2.17) * 0.65;
 
     const u1 = x * k1 * 0.5 + ph1 * 0.5;
     const u2 = x * k2 * 0.5 + ph2 * 0.5;
@@ -457,7 +457,8 @@ export function createNordicOceanRenderer() {
     const cuspBlend = Math.min(1, chop * 1.18);
     const combined = smoothWave * (1 - cuspBlend) + cuspWave * cuspBlend;
 
-    const maxAmp = (2.2 + chop * 19.5) * depthScale;
+    const calmAmpScale = chop < 0.28 ? 0.30 : 1;
+    const maxAmp = (2.2 + chop * 19.5) * depthScale * (0.90 + (row % 4) * 0.07) * calmAmpScale;
     const y = base - combined * maxAmp;
     const peakness = Math.max(0, (combined + 0.18) / 1.14);
     return { y, peakness };
@@ -977,6 +978,38 @@ export function createNordicOceanRenderer() {
     ctx.restore();
   }
 
+  function drawCalmSeaBand(ctx: CanvasRenderingContext2D, pal: Palette, time: number) {
+    const g = ctx.createLinearGradient(0, HORIZON_Y, 0, SCENE_HEIGHT);
+    g.addColorStop(0, pal.seaHorizon);
+    g.addColorStop(0.35, pal.seaBody);
+    g.addColorStop(1, pal.seaTrough);
+    ctx.fillStyle = g;
+    ctx.fillRect(0, HORIZON_Y, SCENE_WIDTH, SCENE_HEIGHT - HORIZON_Y);
+    const glints = [
+      [64, 470, 18, 0.2], [214, 520, 26, 0.16], [392, 493, 17, 0.22],
+      [580, 555, 23, 0.18], [754, 505, 19, 0.15], [948, 574, 28, 0.18],
+      [1160, 515, 21, 0.2], [1392, 590, 24, 0.17], [1528, 474, 16, 0.2],
+      [118, 680, 22, 0.18], [342, 732, 18, 0.16], [552, 664, 25, 0.18],
+      [802, 748, 20, 0.15], [1024, 690, 27, 0.17], [1246, 776, 22, 0.18],
+      [1468, 704, 18, 0.16],
+    ];
+    ctx.save();
+    ctx.strokeStyle = pal.foamColor;
+    ctx.lineCap = 'round';
+    for (let i = 0; i < glints.length; i++) {
+      const [gx, gy, size, alpha] = glints[i];
+      const x = wrap(gx - time * (2.4 + (i % 3) * 0.5) + 45, SCENE_WIDTH + 90) - 45;
+      const y = gy + Math.sin(time * 0.55 + i * 1.4) * 1.8;
+      ctx.globalAlpha = alpha + Math.sin(time * 0.8 + i) * 0.035;
+      ctx.lineWidth = 1.3 + (i % 2) * 0.5;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.quadraticCurveTo(x + size * 0.5, y - 2.2, x + size, y + 0.2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
   // --- MULTI-ROW SCALLOPED CUSP SEA RENDERER (Exact f04 Calm + crop_wind_sea + crop_storm_sea!) ---
   function drawWaveRowsRange(
     ctx: CanvasRenderingContext2D,
@@ -986,6 +1019,10 @@ export function createNordicOceanRenderer() {
     state: OceanRenderState
   ) {
     const stepX = 6; // High horizontal resolution so every cusp crest is razor-clean and silky!
+    if (currentChop < 0.30) {
+      if (fromRow === 0) drawCalmSeaBand(ctx, pal, state.time);
+      return;
+    }
 
     // Base sea fill under horizon if starting at row 0
     if (fromRow === 0) {
@@ -1002,6 +1039,7 @@ export function createNordicOceanRenderer() {
     }
 
     for (let r = fromRow; r <= toRow; r++) {
+      if (currentChop < 0.30 && r % 3 !== 0 && r !== SHIP_ROW) continue;
       const u = r / (WAVE_ROWS - 1);
       const base = rowBaseY(r);
       const nextBase = r < WAVE_ROWS - 1 ? rowBaseY(r + 1) : SCENE_HEIGHT + 16;
@@ -1060,13 +1098,14 @@ export function createNordicOceanRenderer() {
           const p0 = pts[i];
           const p1 = pts[i + 1];
           const pk = (p0.peakness + p1.peakness) * 0.5;
-          const threshold = 0.34 - currentChop * 0.22;
+          const threshold = currentChop < 0.30 ? 0.86 : 0.34 - currentChop * 0.22;
           const segAlpha = Math.max(0, (pk - threshold) * 1.65) * foamStrength;
-          if (segAlpha <= 0.04) continue;
+          if (segAlpha <= 0.04 || Math.abs(Math.sin(p0.x * 0.033 + r * 1.7)) > 0.93) continue;
 
           ctx.globalAlpha = Math.min(0.96, segAlpha);
           const capBoost = pk > 0.72 ? (pk - 0.72) * 3.4 : 0;
-          ctx.lineWidth = (0.85 + pk * 2.25 + capBoost) * (0.52 + u * 0.58);
+          const foamWidthJitter = 0.78 + Math.abs(Math.sin(p0.x * 0.047 + r * 1.9)) * 0.72;
+          ctx.lineWidth = (0.85 + pk * 2.25 + capBoost) * (0.52 + u * 0.58) * foamWidthJitter;
           ctx.beginPath();
           ctx.moveTo(p0.x, p0.y + 0.5);
           ctx.lineTo(p1.x, p1.y + 0.5);
@@ -1097,7 +1136,7 @@ export function createNordicOceanRenderer() {
       } else {
         // Calm Sunny / Dusk Sea: Minimalist scattered scalloped white wavelets ('~^~') & fine glints (f04_sunny.png!)
         if (r >= 1 && r % 2 === 1) {
-          const count = 3 + Math.floor(u * 3);
+          const count = currentChop < 0.30 ? 1 + Math.floor(u * 2) : 3 + Math.floor(u * 3);
           ctx.save();
           ctx.strokeStyle = pal.foamColor;
           ctx.lineCap = 'round';
@@ -1105,7 +1144,7 @@ export function createNordicOceanRenderer() {
             const wx = wrap(j * 410 + r * 175 - state.time * (8 + r * 1.8), SCENE_WIDTH + 160) - 80;
             const wy = evalWaveRow(r, wx, state.wavePhase, currentChop).y + 5 + u * 7;
             const wScale = 0.62 + u * 0.52;
-            ctx.globalAlpha = 0.5 + u * 0.25;
+            ctx.globalAlpha = currentChop < 0.30 ? 0.28 + u * 0.14 : 0.5 + u * 0.25;
             ctx.lineWidth = 1.45 * wScale;
 
             // Delicate two-cusp minimalist wavelet (exact f04_sunny.png & f50_after_rain.png detail!)
